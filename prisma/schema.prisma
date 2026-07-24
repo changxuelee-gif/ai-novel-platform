@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ========== Enums ==========
+
+enum UserRole {
+  READER
+  CREATOR
+  AUTHOR
+  VERIFIED
+}
+
+enum NovelStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ActivityType {
+  WRITING_CONTEST
+  THEME_CHALLENGE
+  COMMUNITY_EVENT
+}
+
+enum ActivityStatus {
+  UPCOMING
+  ACTIVE
+  ENDED
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TaskType {
+  DAILY
+  WEEKLY
+  NEWCOMER
+}
+
+enum EarningType {
+  READ
+  INTERACT
+  ACTIVITY
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+// ========== User & Auth ==========
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  avatar        String?
+  role          UserRole  @default(READER)
+  coins         Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  novels           Novel[]
+  followers        Follow[]         @relation("following")
+  following        Follow[]         @relation("follower")
+  favorites        Favorite[]
+  ratings          Rating[]
+  comments         Comment[]
+  readingProgress  ReadingProgress[]
+  characters       Character[]
+  writingStyles    WritingStyle[]
+  submissions      ActivitySubmission[]
+  userTasks        UserTask[]
+  earnings         Earning[]
+  withdrawals      Withdrawal[]
+  aiUsageLogs      AIUsageLog[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+// ========== Content ==========
+
+model Novel {
+  id         String      @id @default(cuid())
+  title      String
+  cover      String?
+  summary    String?
+  tags       Json        @default("[]")
+  status     NovelStatus @default(DRAFT)
+  aiAssisted Boolean     @default(false)
+  views      Int         @default(0)
+  authorId   String
+  categoryId String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category   Category?   @relation(fields: [categoryId], references: [id])
+  chapters   Chapter[]
+  novelTags  NovelTag[]
+  favorites  Favorite[]
+  ratings    Rating[]
+  comments   Comment[]
+  readingProgress ReadingProgress[]
+  submissions ActivitySubmission[]
+
+  @@index([authorId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Chapter {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  order     Int
+  isPremium Boolean  @default(false)
+  novelId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  novel          Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  branches       Branch[]
+  targetBranches Branch[] @relation("targetBranch")
+  comments       Comment[]
+  readingProgress ReadingProgress[]
+
+  @@index([novelId, order])
+}
+
+model Branch {
+  id              String  @id @default(cuid())
+  chapterId       String
+  optionText      String
+  targetChapterId String?
+  condition       String?
+
+  chapter        Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  targetChapter  Chapter? @relation("targetBranch", fields: [targetChapterId], references: [id])
+
+  @@index([chapterId])
+}
+
+// Need to add the back-relation on Chapter for Branch.targetChapter
+// This is handled by the @relation("targetBranch") on Chapter
+
+model Category {
+  id    String  @id @default(cuid())
+  name  String  @unique
+  slug  String  @unique
+  icon  String?
+
+  novels Novel[]
+}
+
+model Tag {
+  id   String @id @default(cuid())
+  name String @unique
+  slug String @unique
+
+  novels NovelTag[]
+}
+
+model NovelTag {
+  novelId String
+  tagId   String
+
+  novel Novel @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([novelId, tagId])
+}
+
+// ========== Interaction ==========
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  novelId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel Novel @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, novelId])
+  @@index([userId])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  userId    String
+  novelId   String
+  score     Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel Novel @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, novelId])
+  @@index([novelId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  userId    String
+  novelId   String
+  chapterId String?
+  content   String
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel   Novel     @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapter Chapter?  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([novelId])
+  @@index([chapterId])
+  @@index([userId])
+}
+
+model ReadingProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  novelId   String
+  chapterId String
+  progress  Float    @default(0)
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel   Novel   @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  chapter Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, novelId])
+  @@index([userId])
+}
+
+// ========== Creative Assets ==========
+
+model Character {
+  id          String   @id @default(cuid())
+  name        String
+  avatar      String?
+  gender      Gender?
+  personality String?
+  backstory   String?
+  speechStyle String?
+  tags        Json     @default("[]")
+  creatorId   String
+  isPublic    Boolean  @default(false)
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([isPublic])
+}
+
+model WritingStyle {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  sampleText  String?
+  tags        Json     @default("[]")
+  creatorId   String
+  isPublic    Boolean  @default(false)
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([isPublic])
+}
+
+// ========== Activity & Task ==========
+
+model Activity {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  cover       String?
+  type        ActivityType
+  startDate   DateTime
+  endDate     DateTime
+  status      ActivityStatus @default(UPCOMING)
+  reward      String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  submissions ActivitySubmission[]
+}
+
+model ActivitySubmission {
+  id          String         @id @default(cuid())
+  activityId  String
+  userId      String
+  novelId     String
+  status      SubmissionStatus @default(PENDING)
+  submittedAt DateTime       @default(now())
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  novel    Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+  @@index([userId])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        TaskType
+  reward      String?
+  condition   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userTasks UserTask[]
+}
+
+model UserTask {
+  id          String    @id @default(cuid())
+  userId      String
+  taskId      String
+  progress    Int       @default(0)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId])
+  @@index([userId])
+}
+
+// ========== Earnings ==========
+
+model Earning {
+  id        String      @id @default(cuid())
+  userId    String
+  type      EarningType
+  amount    Float
+  sourceId  String?
+  createdAt DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Withdrawal {
+  id        String           @id @default(cuid())
+  userId    String
+  amount    Float
+  status    WithdrawalStatus @default(PENDING)
+  method    String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ========== AI Service ==========
+
+model AIUsageLog {
+  id           String   @id @default(cuid())
+  userId       String
+  action       String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
