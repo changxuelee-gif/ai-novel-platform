@@ -501,5 +501,35 @@
     "bio": "Author Bio",
     "joinDate": "Join Date",
     "profileIntro": "Profile"
+  },
+  "auth": {
+    "loginTitle": "Welcome Back",
+    "loginSubtitle": "Log in to your MoRan AI account",
+    "registerTitle": "Create Account",
+    "registerSubtitle": "Join MoRan AI and start your creative journey",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "username": "Username",
+    "usernamePlaceholder": "2-20 characters",
+    "loginButton": "Log In",
+    "registerButton": "Sign Up",
+    "googleLogin": "Continue with Google",
+    "or": "or",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "goRegister": "Sign up",
+    "goLogin": "Log in",
+    "loggingIn": "Logging in...",
+    "registering": "Creating account...",
+    "error": {
+      "invalidCredentials": "Invalid email or password",
+      "emailExists": "This email is already registered",
+      "passwordMismatch": "Passwords do not match",
+      "passwordTooShort": "Password must be at least 6 characters",
+      "registerFailed": "Registration failed, please try again",
+      "loginAfterRegister": "Registration successful, but auto-login failed. Please log in manually.",
+      "networkError": "Network error, please try again"
+    }
   }
 }

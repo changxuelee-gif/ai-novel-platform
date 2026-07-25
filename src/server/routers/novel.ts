@@ -10,16 +10,18 @@ export const novelRouter = router({
         page: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(20),
         categoryId: z.string().optional(),
+        authorId: z.string().optional(),
         status: z.nativeEnum(NovelStatus).optional(),
         sortBy: z.string().default("createdAt"),
         sortOrder: z.enum(["asc", "desc"]).default("desc"),
       })
     )
     .query(async ({ ctx, input }) => {
-      const { page, limit, categoryId, status, sortBy, sortOrder } = input;
+      const { page, limit, categoryId, authorId, status, sortBy, sortOrder } = input;
 
       const where: Record<string, unknown> = {};
       if (categoryId) where.categoryId = categoryId;
+      if (authorId) where.authorId = authorId;
       if (status) where.status = status;
 
       const [novels, total] = await Promise.all([

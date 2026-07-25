@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { SlidersHorizontal, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { novelCards } from "@/lib/mock-data";
+import { trpc } from "@/trpc/client";
+import { toNovelCard } from "@/lib/transformers";
 import { LanguageTabs } from "./LanguageTabs";
 import { GenreTabs } from "./GenreTabs";
 import { NovelGrid } from "./NovelGrid";
@@ -12,17 +13,28 @@ import { NovelGrid } from "./NovelGrid";
 export function NovelSection() {
   const t = useTranslations("home");
   const [activeLanguage, setActiveLanguage] = useState("zh");
-  const [activeGenre, setActiveGenre] = useState("mystery");
+  const [activeGenre, setActiveGenre] = useState("all");
+
+  const { data, isLoading } = trpc.novel.list.useQuery({
+    page: 1,
+    limit: 100,
+    status: "PUBLISHED",
+    sortBy: "createdAt",
+    sortOrder: "desc",
+  });
+
+  const allNovels = useMemo(
+    () => (data?.novels ?? []).map(toNovelCard),
+    [data]
+  );
 
   const filteredNovels = useMemo(() => {
-    return novelCards.filter((novel) => {
-      const matchLang =
-        activeLanguage === "all" || novel.language === activeLanguage;
+    return allNovels.filter((novel) => {
       const matchGenre =
         activeGenre === "all" || novel.genre === activeGenre;
-      return matchLang && matchGenre;
+      return matchGenre;
     });
-  }, [activeLanguage, activeGenre]);
+  }, [allNovels, activeGenre]);
 
   return (
     <section>
@@ -57,11 +69,19 @@ export function NovelSection() {
 
       {/* Novel grid */}
       <div className="mt-4">
-        <NovelGrid novels={filteredNovels} />
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="h-56 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        ) : (
+          <NovelGrid novels={filteredNovels} />
+        )}
       </div>
 
       {/* Load more */}
-      {filteredNovels.length > 0 && (
+      {filteredNovels.length > 0 && !isLoading && (
         <div className="mt-6 flex justify-center">
           <Button variant="outline" size="sm" className="gap-1">
             {t("loadMore")}
@@ -69,7 +89,7 @@ export function NovelSection() {
         </div>
       )}
 
-      {filteredNovels.length === 0 && (
+      {filteredNovels.length === 0 && !isLoading && (
         <div className="py-12 text-center text-sm text-muted-foreground">
           {t("noData", { ns: "common" })}
         </div>

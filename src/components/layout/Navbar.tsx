@@ -7,7 +7,7 @@ import { useUIStore } from "@/stores/useUIStore";
 import { useLocaleStore } from "@/stores/useLocaleStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -33,8 +33,11 @@ import {
   BookOpen,
   Settings,
   Clock,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 import { SidebarContent } from "./Sidebar";
+import { useSession, signOut } from "next-auth/react";
 
 const locales = [
   { code: "zh-CN", label: "简体中文" },
@@ -49,6 +52,7 @@ export function Navbar() {
   const { theme, setTheme } = useUIStore();
   const { setLocale } = useLocaleStore();
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   // Derive current locale from URL path
   const urlLocale = pathname.split("/")[1] || "zh-CN";
@@ -64,6 +68,14 @@ export function Navbar() {
     }
     window.location.href = pathSegments.join("/") || `/${newLocale}`;
   };
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/" });
+  };
+
+  const userInitial = session?.user?.name
+    ? session.user.name.charAt(0).toUpperCase()
+    : "U";
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-800 bg-gray-900 text-white">
@@ -203,43 +215,66 @@ export function Navbar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* User avatar */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button className="inline-flex items-center justify-center rounded-full text-white hover:bg-gray-800 transition-colors" />
-              }
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  U
-                </AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                {t("nav.profile")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => window.location.href = "/profile/bookshelf"}>
-                <BookOpen className="mr-2 h-4 w-4" />
-                {t("nav.bookshelf")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => window.location.href = "/profile/history"}>
-                <Clock className="mr-2 h-4 w-4" />
-                {t("profile.readingHistory")}
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                {t("nav.settings")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <LogOut className="mr-2 h-4 w-4" />
-                {t("common.logout")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* User section - conditional render based on auth state */}
+          {session?.user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button className="inline-flex items-center justify-center rounded-full text-white hover:bg-gray-800 transition-colors" />
+                }
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={session.user.image ?? ""} alt={session.user.name ?? ""} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                    {userInitial}
+                  </AvatarFallback>
+                </Avatar>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-medium">{session.user.name}</p>
+                  <p className="text-xs text-muted-foreground">{session.user.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => window.location.href = "/profile"}>
+                  <User className="mr-2 h-4 w-4" />
+                  {t("nav.profile")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => window.location.href = "/profile/bookshelf"}>
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  {t("nav.bookshelf")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => window.location.href = "/profile/history"}>
+                  <Clock className="mr-2 h-4 w-4" />
+                  {t("profile.readingHistory")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => window.location.href = "/settings"}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  {t("nav.settings")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {t("common.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link href="/login">
+                <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800 gap-1">
+                  <LogIn className="h-4 w-4" />
+                  {t("common.login")}
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1">
+                  <UserPlus className="h-4 w-4" />
+                  {t("common.register")}
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </header>

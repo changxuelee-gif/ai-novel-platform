@@ -7,7 +7,8 @@ import { RankingTabs } from "@/components/ranking/RankingTabs";
 import { RankingTop3 } from "@/components/ranking/RankingTop3";
 import { RankingList } from "@/components/ranking/RankingList";
 import { RankingPagination } from "@/components/ranking/RankingPagination";
-import { rankingTop3, rankingFullList } from "@/lib/mock-data";
+import { trpc } from "@/trpc/client";
+import { toRankingItem } from "@/lib/transformers";
 import type { RankingType, RankingTimeRange } from "@/types/novel";
 
 const PAGE_SIZE = 10;
@@ -35,12 +36,25 @@ export default function RankingPage() {
     setCurrentPage(1);
   };
 
+  const { data, isLoading } = trpc.novel.list.useQuery({
+    page: 1,
+    limit: 100,
+    status: "PUBLISHED",
+    sortBy: selectedType === "popularity" ? "views" : "createdAt",
+    sortOrder: "desc",
+  });
+
+  const allItems = useMemo(
+    () => (data?.novels ?? []).map((novel, index) => toRankingItem(novel, index)),
+    [data]
+  );
+
+  const rankingTop3 = allItems.slice(0, 3);
+  const totalPages = Math.ceil(allItems.length / PAGE_SIZE);
   const paginatedList = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return rankingFullList.slice(start, start + PAGE_SIZE);
-  }, [currentPage]);
-
-  const totalPages = Math.ceil(rankingFullList.length / PAGE_SIZE);
+    return allItems.slice(start, start + PAGE_SIZE);
+  }, [allItems, currentPage]);
 
   return (
     <AppLayout>
@@ -62,24 +76,41 @@ export default function RankingPage() {
         />
 
         {/* Top 3 podium */}
-        <RankingTop3 top3={rankingTop3} />
+        {isLoading ? (
+          <div className="grid grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-48 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        ) : (
+          <RankingTop3 top3={rankingTop3} />
+        )}
 
         {/* Full list section */}
         <div className="mt-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">{t("fullList")}</h2>
             <span className="text-xs text-muted-foreground">
-              {t("totalWorks", { count: rankingFullList.length })}
+              {t("totalWorks", { count: allItems.length })}
             </span>
           </div>
 
-          <RankingList list={paginatedList} />
-
-          <RankingPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <RankingList list={paginatedList} />
+              <RankingPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </>
+          )}
         </div>
       </div>
     </AppLayout>

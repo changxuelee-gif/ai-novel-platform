@@ -20,6 +20,7 @@ export interface ActivityCardData {
   endDate: string;
   themeColor: string;
   cover?: string;
+  category?: string;
 }
 
 export interface RankingItem {
@@ -47,9 +48,9 @@ export interface ActivityBannerData {
   title: string;
   subtitle: string;
   description: string;
-  participants: number;
-  submissions: number;
-  remainingTime: string;
+  participants?: number;
+  submissions?: number;
+  remainingTime?: string;
   themeColor: string;
   icon?: string;
 }

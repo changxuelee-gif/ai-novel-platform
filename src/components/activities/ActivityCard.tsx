@@ -5,10 +5,15 @@ import { Users, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { ActivityCardDataExtended } from "@/types/novel";
+import type { ActivityCardData } from "@/types/novel";
 
 interface ActivityCardProps {
-  activity: ActivityCardDataExtended;
+  activity: ActivityCardData & {
+    status?: "ongoing" | "upcoming" | "ended";
+    participants?: number;
+    reward?: string;
+    progress?: number;
+  };
 }
 
 const statusConfig = {
@@ -19,7 +24,7 @@ const statusConfig = {
 
 export function ActivityCard({ activity }: ActivityCardProps) {
   const t = useTranslations("activities");
-  const status = statusConfig[activity.status];
+  const status = statusConfig[activity.status ?? "ongoing"];
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md">
@@ -54,11 +59,11 @@ export function ActivityCard({ activity }: ActivityCardProps) {
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <span className="flex items-center gap-1">
             <Users className="size-3.5" />
-            {activity.participants.toLocaleString()}
+            {(activity.participants ?? 0).toLocaleString()}
           </span>
           <span className="flex items-center gap-1">
             <Gift className="size-3.5" />
-            {activity.reward}
+            {activity.reward ?? "-"}
           </span>
         </div>
 
@@ -66,7 +71,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
         <div className="mt-auto space-y-1">
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{t("remainingTime")}</span>
-            <span>{activity.progress}%</span>
+            <span>{activity.progress ?? 0}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
@@ -74,7 +79,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
                 "h-full rounded-full bg-gradient-to-r transition-all",
                 activity.themeColor
               )}
-              style={{ width: `${activity.progress}%` }}
+              style={{ width: `${activity.progress ?? 0}%` }}
             />
           </div>
         </div>
@@ -84,7 +89,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
           className="w-full"
           disabled={activity.status === "ended"}
         >
-          {activity.status === "ended" ? t("ended") : t("joinNow")}
+          {(activity.status ?? "ongoing") === "ended" ? t("ended") : t("joinNow")}
         </Button>
       </div>
     </div>

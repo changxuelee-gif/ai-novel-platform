@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BookshelfCard } from "@/components/bookshelf/BookshelfCard";
 import { BookshelfFilter } from "@/components/bookshelf/BookshelfFilter";
-import { mockBookshelf } from "@/lib/mock-data";
 import { Search, BookOpen } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { trpc } from "@/trpc/client";
 
 export default function BookshelfPage() {
   const t = useTranslations("profile.bookshelfPage");
@@ -17,15 +17,30 @@ export default function BookshelfPage() {
   const [sortBy, setSortBy] = useState("sortByRecent");
   const [search, setSearch] = useState("");
 
-  const filtered = useMemo(() => {
-    let items = [...mockBookshelf];
+  const { data, isLoading } = trpc.interaction.getBookshelf.useQuery();
 
-    // Filter by category
+  const bookshelfItems = useMemo(() => {
+    if (!data) return [];
+    return data.map((fav) => ({
+      novelId: fav.novelId,
+      title: fav.novel?.title ?? "Unknown",
+      author: fav.novel?.author?.name ?? "Unknown",
+      cover: fav.novel?.cover ?? "",
+      category: (fav.novel?.category?.slug ?? "all") as "all" | "following" | "completed" | "pending",
+      progress: fav.chapterOrder ?? 0,
+      lastReadChapter: "-",
+      addedAt: fav.createdAt.toISOString().split("T")[0],
+      updatedAt: fav.createdAt.toISOString().split("T")[0],
+    }));
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    let items = [...bookshelfItems];
+
     if (category !== "all") {
       items = items.filter((item) => item.category === category);
     }
 
-    // Filter by search
     if (search.trim()) {
       const q = search.toLowerCase();
       items = items.filter(
@@ -35,7 +50,6 @@ export default function BookshelfPage() {
       );
     }
 
-    // Sort
     switch (sortBy) {
       case "sortByAdded":
         items.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
@@ -48,7 +62,7 @@ export default function BookshelfPage() {
     }
 
     return items;
-  }, [category, sortBy, search]);
+  }, [bookshelfItems, category, sortBy, search]);
 
   return (
     <AppLayout>
@@ -76,7 +90,13 @@ export default function BookshelfPage() {
         />
 
         {/* Grid */}
-        {filtered.length > 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="h-56 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        ) : filtered.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {filtered.map((item) => (
               <BookshelfCard key={item.novelId} item={item} />

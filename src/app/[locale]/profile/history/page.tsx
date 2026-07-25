@@ -1,16 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
-import { mockReadingHistory } from "@/lib/mock-data";
 import { BookOpen, Trash2, Clock } from "lucide-react";
+import { trpc } from "@/trpc/client";
+
+interface HistoryItem {
+  id: string;
+  novelId: string;
+  novelTitle: string;
+  novelCover: string;
+  chapterId: string;
+  chapterOrder: number;
+  chapterTitle: string;
+  readAt: string;
+}
 
 export default function HistoryPage() {
   const t = useTranslations("profile.historyPage");
-  const [history, setHistory] = useState(mockReadingHistory);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  const { data: readingProgresses, isLoading } = trpc.interaction.getReadingProgresses.useQuery();
+
+  useEffect(() => {
+    if (readingProgresses) {
+      const items: HistoryItem[] = readingProgresses.map((rp) => ({
+        id: rp.id,
+        novelId: rp.novelId,
+        novelTitle: rp.novel?.title ?? "Unknown",
+        novelCover: rp.novel?.cover ?? "",
+        chapterId: rp.chapterId,
+        chapterOrder: rp.chapterOrder,
+        chapterTitle: rp.chapter?.title ?? "",
+        readAt: rp.updatedAt.toISOString().split("T")[0],
+      }));
+      setHistory(items);
+    }
+  }, [readingProgresses]);
 
   const handleDelete = (id: string) => {
     setHistory((prev) => prev.filter((h) => h.id !== id));
@@ -35,7 +64,13 @@ export default function HistoryPage() {
         </div>
 
         {/* History List */}
-        {history.length > 0 ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        ) : history.length > 0 ? (
           <div className="space-y-3">
             {history.map((item) => (
               <div
@@ -60,7 +95,7 @@ export default function HistoryPage() {
                   </Link>
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <BookOpen className="w-3 h-3" />
-                    {t("readTo", { order: item.chapterOrder})} · {item.chapterTitle}
+                    {t("readTo", { order: item.chapterOrder })} · {item.chapterTitle}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <Clock className="w-3 h-3" />

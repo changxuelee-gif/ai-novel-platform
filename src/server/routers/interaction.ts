@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "@/server/trpc";
+import { router, publicProcedure, protectedProcedure } from "@/server/trpc";
 
 export const interactionRouter = router({
   favorite: protectedProcedure
@@ -131,5 +131,72 @@ export const interactionRouter = router({
       });
 
       return saved;
+    }),
+
+  getBookshelf: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    const favorites = await ctx.prisma.favorite.findMany({
+      where: { userId },
+      include: {
+        novel: {
+          include: {
+            author: { select: { name: true } },
+            category: true,
+            _count: { select: { chapters: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return favorites.map((fav) => ({
+      ...fav,
+      chapterOrder: 0,
+    }));
+  }),
+
+  getReadingProgresses: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    const progresses = await ctx.prisma.readingProgress.findMany({
+      where: { userId },
+      include: {
+        novel: { select: { id: true, title: true, cover: true } },
+        chapter: { select: { id: true, title: true, order: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return progresses.map((p) => ({
+      ...p,
+      chapterOrder: p.chapter.order,
+    }));
+  }),
+
+  getCommentsByNovel: publicProcedure
+    .input(z.object({
+      novelId: z.string(),
+      page: z.number().min(1).default(1),
+      limit: z.number().min(1).max(100).default(20),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { novelId, page, limit } = input;
+
+      const [comments, total] = await Promise.all([
+        ctx.prisma.comment.findMany({
+          where: { novelId },
+          include: {
+            user: { select: { id: true, name: true, avatar: true, image: true } },
+            novel: { select: { id: true, title: true, cover: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        ctx.prisma.comment.count({ where: { novelId } }),
+      ]);
+
+      return { comments, total, page, limit };
     }),
 });

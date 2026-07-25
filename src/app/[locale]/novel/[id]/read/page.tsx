@@ -9,12 +9,9 @@ import { ReaderToolbar } from "@/components/reader/ReaderToolbar";
 import { ReaderSettings } from "@/components/reader/ReaderSettings";
 import { ChapterNav } from "@/components/reader/ChapterNav";
 import { CommentPanel } from "@/components/reader/CommentPanel";
-import { InteractiveChoiceCard } from "@/components/reader/InteractiveChoice";
-import {
-  getChaptersByNovelId,
-  getNovelById,
-  mockInteractiveChoices,
-} from "@/lib/mock-data";
+
+import { trpc } from "@/trpc/client";
+import { toMockNovel, toMockChapter } from "@/lib/transformers";
 
 const bgColorMap: Record<string, { bg: string; text: string }> = {
   day: { bg: "#ffffff", text: "#1a1a1a" },
@@ -30,8 +27,18 @@ export default function ReadPage() {
 
   const { settings } = useReaderStore();
 
-  const novel = getNovelById(novelId);
-  const chapters = getChaptersByNovelId(novelId);
+  const { data: novelData } = trpc.novel.getById.useQuery({ id: novelId });
+  const { data: chaptersData } = trpc.chapter.list.useQuery({
+    novelId,
+    limit: 100,
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const novel = novelData ? toMockNovel(novelData as any) : null;
+  const chapters = chaptersData
+    ? chaptersData.chapters.map(toMockChapter)
+    : [];
+
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
   const currentChapter = chapters[currentChapterIndex] || chapters[0];
 
@@ -85,10 +92,6 @@ export default function ReadPage() {
 
   const currentBg = bgColorMap[settings.bgColor] || bgColorMap.day;
 
-  const interactiveChoice = mockInteractiveChoices.find(
-    (c) => c.chapterId === currentChapter.id
-  );
-
   // Mobile toolbar buttons
   const MobileToolbarButtons = () => (
     <div className="lg:hidden fixed bottom-16 left-0 right-0 z-30 flex justify-center gap-4 pb-2">
@@ -106,6 +109,17 @@ export default function ReadPage() {
       </button>
     </div>
   );
+
+  if (!novel || chapters.length === 0) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-sm text-muted-foreground">加载中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: currentBg.bg, color: currentBg.text }}>
@@ -154,17 +168,6 @@ export default function ReadPage() {
               ))}
             </div>
 
-            {/* Interactive Choice */}
-            {interactiveChoice && (
-              <InteractiveChoiceCard
-                choice={interactiveChoice}
-                onChoice={(optionId) => {
-                  const target = interactiveChoice.options.find((o) => o.id === optionId);
-                  if (target) handleChapterSelect(target.targetChapterId);
-                }}
-              />
-            )}
-
             {/* Bottom spacer */}
             <div className="h-24" />
           </div>
@@ -172,7 +175,7 @@ export default function ReadPage() {
 
         {/* Right Panel - Comments (desktop) */}
         <div className="hidden lg:block w-72 shrink-0">
-          <CommentPanel />
+          <CommentPanel novelId={novelId} />
         </div>
       </div>
 
@@ -217,7 +220,7 @@ export default function ReadPage() {
       {/* Mobile Comment Sheet */}
       <Sheet open={mobileCommentOpen} onOpenChange={setMobileCommentOpen}>
         <SheetContent side="right" className="w-80 p-0">
-          <CommentPanel />
+          <CommentPanel novelId={novelId} />
         </SheetContent>
       </Sheet>
     </div>

@@ -23,9 +23,41 @@ export const userRouter = router({
           email: true,
           avatar: true,
           image: true,
+          bio: true,
           role: true,
           coins: true,
           createdAt: true,
+          _count: {
+            select: {
+              novels: true,
+              followers: true,
+              following: true,
+              favorites: true,
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      return user;
+    }),
+
+  getById: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const user = await ctx.prisma.user.findUnique({
+        where: { id: input.id },
+        include: {
+          _count: {
+            select: {
+              followers: true,
+              following: true,
+              favorites: true,
+            },
+          },
         },
       });
 

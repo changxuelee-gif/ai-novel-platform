@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Check, BookOpen, Star } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import type { MockNovel } from "@/lib/mock-data";
-import { mockNovels, formatNumber } from "@/lib/mock-data";
+import { formatNumber } from "@/lib/mock-data";
+import { trpc } from "@/trpc/client";
 
 interface NovelSidebarProps {
   novel: MockNovel;
@@ -16,13 +17,25 @@ interface NovelSidebarProps {
 export function NovelSidebar({ novel }: NovelSidebarProps) {
   const t = useTranslations("novel");
 
-  const authorNovels = mockNovels.filter(
-    (n) => n.author.id === novel.author.id && n.id !== novel.id
-  );
+  const { data: authorWorks } = trpc.novel.list.useQuery({
+    page: 1,
+    limit: 5,
+    authorId: novel.author.id,
+    status: "PUBLISHED",
+    sortBy: "views",
+    sortOrder: "desc",
+  });
 
-  const relatedNovels = mockNovels
-    .filter((n) => n.id !== novel.id && n.category === novel.category)
-    .slice(0, 4);
+  const { data: relatedWorks } = trpc.novel.list.useQuery({
+    page: 1,
+    limit: 4,
+    status: "PUBLISHED",
+    sortBy: "views",
+    sortOrder: "desc",
+  });
+
+  const authorNovels = (authorWorks?.novels ?? []).filter((n) => n.id !== novel.id);
+  const relatedNovels = (relatedWorks?.novels ?? []).filter((n) => n.id !== novel.id);
 
   return (
     <div className="space-y-6">
@@ -40,20 +53,20 @@ export function NovelSidebar({ novel }: NovelSidebarProps) {
               )}
             </div>
             <div className="text-xs text-muted-foreground">
-              签约作者 · 玄幻大神
+              签约作者
             </div>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-          热爱玄幻创作，擅长构建宏大世界观。代表作《星辰变之万界天尊》持续热销中。
+          {novel.author.name}
         </p>
         <div className="flex gap-4 mb-3 text-center">
           <div>
-            <div className="text-sm font-bold">{authorNovels.length + 1}</div>
+            <div className="text-sm font-bold">{authorWorks?.total ?? 0}</div>
             <div className="text-[10px] text-muted-foreground">作品</div>
           </div>
           <div>
-            <div className="text-sm font-bold">12.8万</div>
+            <div className="text-sm font-bold">0</div>
             <div className="text-[10px] text-muted-foreground">粉丝</div>
           </div>
           <div>
@@ -65,9 +78,11 @@ export function NovelSidebar({ novel }: NovelSidebarProps) {
           <Button size="sm" variant="outline" className="flex-1 text-xs">
             {t("follow")}
           </Button>
-          <Button size="sm" className="flex-1 text-xs">
-            {t("visitPage")}
-          </Button>
+          <Link href={`/author/${novel.author.id}`}>
+            <Button size="sm" className="flex-1 text-xs">
+              {t("visitPage")}
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -86,7 +101,7 @@ export function NovelSidebar({ novel }: NovelSidebarProps) {
                 className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
               >
                 <img
-                  src={n.cover}
+                  src={n.cover ?? ""}
                   alt={n.title}
                   className="w-8 h-11 rounded object-cover shrink-0"
                 />
@@ -98,7 +113,6 @@ export function NovelSidebar({ novel }: NovelSidebarProps) {
                     {formatNumber(n.views)}阅读
                   </div>
                 </div>
-                <span className="text-xs text-amber-500 font-medium">{n.rating}</span>
               </Link>
             ))}
           </div>
@@ -120,7 +134,7 @@ export function NovelSidebar({ novel }: NovelSidebarProps) {
                 className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
               >
                 <img
-                  src={n.cover}
+                  src={n.cover ?? ""}
                   alt={n.title}
                   className="w-8 h-11 rounded object-cover shrink-0"
                 />
@@ -129,11 +143,11 @@ export function NovelSidebar({ novel }: NovelSidebarProps) {
                     {n.title}
                   </div>
                   <div className="text-[10px] text-muted-foreground">
-                    {n.author.name} · {formatNumber(n.views)}阅读
+                    {n.author?.name ?? ""} · {formatNumber(n.views)}阅读
                   </div>
                 </div>
                 <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                  {n.category}
+                  {n.category?.name ?? ""}
                 </Badge>
               </Link>
             ))}

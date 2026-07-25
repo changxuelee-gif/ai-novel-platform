@@ -5,14 +5,15 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ProfileSidebar } from "@/components/profile/ProfileSidebar";
 import { MessageTabs } from "@/components/profile/MessageTabs";
 import { MessageList } from "@/components/profile/MessageList";
-import { mockUserProfile, mockUserAssets, mockMessages } from "@/lib/mock-data";
-import type { MessageItem } from "@/lib/mock-data";
+import { mockUserProfile, mockUserAssets, type MessageItem } from "@/lib/mock-data";
 
 type MessageTabType = "system" | "comment" | "like";
 
+const mockMessages: MessageItem[] = [];
+
 export default function MessagesPage() {
   const [activeTab, setActiveTab] = useState<MessageTabType>("system");
-  const [messages, setMessages] = useState<MessageItem[]>(mockMessages);
+  const [messages] = useState<MessageItem[]>(mockMessages);
 
   const filteredMessages = messages.filter((msg) => msg.type === activeTab);
 
@@ -22,10 +23,9 @@ export default function MessagesPage() {
     like: messages.filter((m) => m.type === "like" && !m.isRead).length,
   };
 
-  const handleMarkAsRead = (id: string) => {
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === id ? { ...msg, isRead: true } : msg))
-    );
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleMarkAsRead = (_id?: string) => {
+    // TODO: call API to mark as read
   };
 
   return (

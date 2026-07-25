@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { useParams } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ThumbsUp, MessageCircle, Star, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Comment } from "@/types";
-import { mockComments } from "@/lib/mock-data";
+import { trpc } from "@/trpc/client";
+import { toComment } from "@/lib/transformers";
 
 function ReviewItem({ comment, depth = 0 }: { comment: Comment; depth?: number }) {
   const t = useTranslations("novel");
@@ -40,7 +42,6 @@ function ReviewItem({ comment, depth = 0 }: { comment: Comment; depth?: number }
               </div>
             </div>
 
-            {/* Star rating for first-level comments */}
             {depth === 0 && (
               <div className="flex items-center gap-0.5 mb-2">
                 {[1, 2, 3, 4, 5].map((i) => (
@@ -83,7 +84,6 @@ function ReviewItem({ comment, depth = 0 }: { comment: Comment; depth?: number }
         </div>
       </div>
 
-      {/* Replies */}
       {comment.replies.length > 0 && (
         <div>
           <button
@@ -114,6 +114,16 @@ function ReviewItem({ comment, depth = 0 }: { comment: Comment; depth?: number }
 
 export function ReviewList() {
   const t = useTranslations("novel");
+  const params = useParams();
+  const novelId = params.id as string;
+
+  const { data } = trpc.interaction.getCommentsByNovel.useQuery({
+    novelId,
+    page: 1,
+    limit: 10,
+  });
+
+  const comments = (data?.comments ?? []).map(toComment);
 
   return (
     <div>
@@ -123,15 +133,21 @@ export function ReviewList() {
           {t("reviews")}
         </h3>
         <button className="text-sm text-primary hover:underline">
-          {t("viewAllReviews", { count: 1247 })}
+          {t("viewAllReviews", { count: data?.total ?? 0 })}
         </button>
       </div>
 
-      <div className="divide-y divide-border/50">
-        {mockComments.map((comment) => (
-          <ReviewItem key={comment.id} comment={comment} />
-        ))}
-      </div>
+      {comments.length === 0 ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">
+          暂无评论
+        </div>
+      ) : (
+        <div className="divide-y divide-border/50">
+          {comments.map((comment) => (
+            <ReviewItem key={comment.id} comment={comment} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

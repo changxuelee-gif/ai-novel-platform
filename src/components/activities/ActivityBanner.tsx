@@ -35,15 +35,15 @@ export function ActivityBanner({ banner }: ActivityBannerProps) {
           <div className="flex flex-wrap gap-4 pt-2 text-sm text-white/90">
             <span className="flex items-center gap-1.5">
               <Users className="size-4" />
-              {t("participants")}: {banner.participants.toLocaleString()}
+              {t("participants")}: {(banner.participants ?? 0).toLocaleString()}
             </span>
             <span className="flex items-center gap-1.5">
               <FileText className="size-4" />
-              {t("submissions")}: {banner.submissions.toLocaleString()}
+              {t("submissions")}: {(banner.submissions ?? 0).toLocaleString()}
             </span>
             <span className="flex items-center gap-1.5">
               <Clock className="size-4" />
-              {t("remainingTime")}: {banner.remainingTime}
+              {t("remainingTime")}: {banner.remainingTime ?? "-"}
             </span>
           </div>
 

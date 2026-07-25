@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ========== Enums ==========
@@ -72,8 +72,10 @@ model User {
   name          String?
   email         String    @unique
   emailVerified DateTime?
+  password      String?
   image         String?
   avatar        String?
+  bio           String?
   role          UserRole  @default(READER)
   coins         Int       @default(0)
   createdAt     DateTime  @default(now())

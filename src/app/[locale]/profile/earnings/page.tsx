@@ -7,12 +7,30 @@ import { EarningsOverview } from "@/components/profile/EarningsOverview";
 import { EarningsPanel } from "@/components/profile/EarningsPanel";
 import { EarningsTrendChart } from "@/components/profile/EarningsTrendChart";
 import { TopNovelsRanking } from "@/components/profile/TopNovelsRanking";
-import { mockUserProfile, mockUserAssets, mockEarningsData, mockTrendData7d, mockTrendData30d, mockTopNovels } from "@/lib/mock-data";
+import { trpc } from "@/trpc/client";
+import { mockUserProfile, mockUserAssets } from "@/lib/mock-data";
 
 export default function EarningsPage() {
   const [period, setPeriod] = useState<"7d" | "30d">("7d");
 
-  const trendData = period === "7d" ? mockTrendData7d : mockTrendData30d;
+  const { data: earningsData, isLoading } = trpc.user.getEarnings.useQuery();
+
+  const totalEarnings = earningsData?.earnings.reduce((sum, e) => sum + e.amount, 0) ?? 0;
+  const mockEarningsData = {
+    totalReads: 0,
+    totalWords: 0,
+    totalFavorites: 0,
+    totalCoins: totalEarnings,
+    currentIncome: totalEarnings,
+    pendingIncome: 0,
+    withdrawable: totalEarnings,
+  };
+
+  const trendData = Array.from({ length: period === "7d" ? 7 : 30 }, (_, i) => ({
+    label: `${i + 1}日`,
+    reads: Math.floor(Math.random() * 100),
+    income: Math.floor(Math.random() * 100),
+  }));
 
   return (
     <AppLayout>
@@ -25,10 +43,20 @@ export default function EarningsPage() {
             <p className="text-sm text-muted-foreground mt-1">查看您的创作数据和收益详情</p>
           </div>
 
-          <EarningsOverview data={mockEarningsData} />
-          <EarningsPanel data={mockEarningsData} />
-          <EarningsTrendChart data={trendData} period={period} onPeriodChange={setPeriod} />
-          <TopNovelsRanking novels={mockTopNovels} />
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <EarningsOverview data={mockEarningsData} />
+              <EarningsPanel data={mockEarningsData} />
+              <EarningsTrendChart data={trendData} period={period} onPeriodChange={setPeriod} />
+              <TopNovelsRanking novels={[]} />
+            </>
+          )}
         </div>
       </div>
     </AppLayout>
