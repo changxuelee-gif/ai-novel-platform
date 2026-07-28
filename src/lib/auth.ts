@@ -1,12 +1,10 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/lib/prisma";
+import { getPrisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -26,6 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = credentials.email as string;
         const password = credentials.password as string;
 
+        const prisma = getPrisma();
         const user = await prisma.user.findUnique({
           where: { email },
         });
@@ -53,16 +52,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: "jwt",
   },
+  secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async signIn({ user, account }) {
-      // Allow all sign-ins (credentials + OAuth)
       if (account?.provider === "google" && user.email) {
-        // Check if user exists, if not create one
+        const prisma = getPrisma();
+
         const existingUser = await prisma.user.findUnique({
           where: { email: user.email },
         });
+
         if (!existingUser) {
-          await prisma.user.create({
+          const newUser = await prisma.user.create({
             data: {
               email: user.email,
               name: user.name ?? user.email.split("@")[0],
@@ -70,6 +71,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               emailVerified: new Date(),
             },
           });
+          user.id = newUser.id;
+        } else {
+          user.id = existingUser.id;
+
+          if (!existingUser.image && user.image) {
+            await prisma.user.update({
+              where: { id: existingUser.id },
+              data: { image: user.image },
+            });
+          }
         }
       }
       return true;
