@@ -47,11 +47,12 @@ export const novelRouter = router({
       const novel = await ctx.prisma.novel.findUnique({
         where: { id: input.id },
         include: {
-          author: { select: { id: true, name: true, avatar: true } },
+          author: { select: { id: true, name: true, avatar: true, image: true, role: true } },
           category: true,
           novelTags: { include: { tag: true } },
-          chapters: { select: { id: true, title: true, order: true } },
-          _count: { select: { favorites: true, ratings: true } },
+          chapters: { select: { id: true, title: true, order: true, isPremium: true } },
+          ratings: { select: { score: true } },
+          _count: { select: { favorites: true, ratings: true, chapters: true } },
         },
       });
 
@@ -172,5 +173,21 @@ export const novelRouter = router({
       ]);
 
       return { novels, total, page, limit };
+    }),
+
+  listTags: publicProcedure
+    .query(async ({ ctx }) => {
+      const tags = await ctx.prisma.tag.findMany({
+        include: {
+          _count: { select: { novels: true } },
+        },
+        orderBy: { name: "asc" },
+      });
+      return tags.map((t) => ({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        novelCount: t._count.novels,
+      }));
     }),
 });

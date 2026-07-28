@@ -35,7 +35,8 @@ export function SettingsSidebar({ activeSection }: SettingsSidebarProps) {
 
       <div className="px-2 pb-4">
         {navItems.map((item) => {
-          const isActive = pathname.includes(item.href.split("/")[1]) || 
+          const isActive = pathname === item.href ||
+            (item.href !== "/settings" && pathname.startsWith(item.href + "/")) ||
             (activeSection && item.labelKey.includes(activeSection));
           return (
             <Link

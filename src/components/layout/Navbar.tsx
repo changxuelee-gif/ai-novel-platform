@@ -79,13 +79,13 @@ export function Navbar() {
     : "U";
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-gray-800 bg-gray-900 text-white">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-card text-foreground">
       <div className="flex h-14 items-center gap-4 px-4">
         {/* Mobile menu button */}
         <Sheet>
           <SheetTrigger
             render={
-              <button className="lg:hidden inline-flex items-center justify-center rounded-md text-white hover:bg-gray-800 size-8" />
+              <button className="lg:hidden inline-flex items-center justify-center rounded-md text-foreground hover:bg-muted size-8" />
             }
           >
             <Menu className="h-5 w-5" />
@@ -104,10 +104,10 @@ export function Navbar() {
         {/* Search */}
         <div className="hidden md:flex flex-1 max-w-md mx-4">
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={t("common.search")}
-              className="pl-9 bg-gray-800 border-gray-700 text-white placeholder:text-gray-400 focus-visible:ring-orange-400"
+              className="pl-9 bg-muted border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
             />
           </div>
         </div>
@@ -118,18 +118,18 @@ export function Navbar() {
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <button className="hidden sm:inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-white hover:bg-gray-800 transition-colors" />
+                <button className="hidden sm:inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-foreground hover:bg-muted transition-colors" />
               }
             >
               {t("nav.createCenter")}
               <ChevronDown className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/create")}>
                 <PenSquare className="mr-2 h-4 w-4" />
                 {t("create.newNovel")}
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/create")}>
                 <BookOpen className="mr-2 h-4 w-4" />
                 {t("create.quickStart")}
               </DropdownMenuItem>
@@ -140,7 +140,7 @@ export function Navbar() {
           <Button
             variant="outline"
             size="sm"
-            className="hidden lg:flex border-gray-600 text-white hover:bg-gray-800 gap-1"
+            className="hidden lg:flex gap-1"
           >
             <Download className="h-4 w-4" />
             {t("common.download")}
@@ -150,7 +150,7 @@ export function Navbar() {
           <Button
             variant="ghost"
             size="icon"
-            className="relative text-white hover:bg-gray-800"
+            className="relative text-foreground hover:bg-muted"
           >
             <Bell className="h-5 w-5" />
             <Badge className="absolute -top-0 -right-0 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-orange-500">
@@ -162,7 +162,7 @@ export function Navbar() {
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <button className="inline-flex items-center justify-center rounded-md text-white hover:bg-gray-800 size-8 transition-colors" />
+                <button className="inline-flex items-center justify-center rounded-md text-foreground hover:bg-muted size-8 transition-colors" />
               }
             >
               {theme === "dark" ? (
@@ -193,7 +193,7 @@ export function Navbar() {
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <button className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-white hover:bg-gray-800 transition-colors" />
+                <button className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-muted transition-colors" />
               }
             >
               <Globe className="h-4 w-4" />
@@ -221,7 +221,7 @@ export function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
-                  <button className="inline-flex items-center justify-center rounded-full text-white hover:bg-gray-800 transition-colors" />
+                  <button className="inline-flex items-center justify-center rounded-full text-foreground hover:bg-muted transition-colors" />
                 }
               >
                 <Avatar className="h-8 w-8">
@@ -263,13 +263,13 @@ export function Navbar() {
           ) : (
             <div className="flex items-center gap-2">
               <Link href="/login">
-                <Button variant="ghost" size="sm" className="text-white hover:bg-gray-800 gap-1">
+                <Button variant="ghost" size="sm" className="gap-1">
                   <LogIn className="h-4 w-4" />
                   {t("common.login")}
                 </Button>
               </Link>
               <Link href="/register">
-                <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white gap-1">
+                <Button size="sm" className="gap-1">
                   <UserPlus className="h-4 w-4" />
                   {t("common.register")}
                 </Button>

@@ -41,6 +41,7 @@
   "home": {
     "title": "MoRan AI - AI Novel Creation & Reading Platform",
     "subtitle": "Create your story world with AI",
+    "noData": "No data available",
     "trending": "Trending",
     "latest": "Latest Updates",
     "recommended": "Recommended",

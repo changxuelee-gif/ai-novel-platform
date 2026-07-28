@@ -22,8 +22,10 @@ export const chapterRouter = router({
           select: {
             id: true,
             title: true,
+            content: true,
             order: true,
             isPremium: true,
+            novelId: true,
             createdAt: true,
           },
           orderBy: { order: "asc" },

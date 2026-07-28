@@ -10,7 +10,7 @@ import { RightSidebar } from "@/components/home/RightSidebar";
 export default function HomePage() {
   return (
     <AppLayout>
-      <div className="flex gap-6 p-6 bg-gray-50 min-h-full">
+      <div className="flex gap-6 p-6 min-h-full">
         {/* 主内容区 */}
         <div className="flex-1 min-w-0 space-y-8">
           <RecentlyRead />

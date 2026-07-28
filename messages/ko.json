@@ -41,6 +41,7 @@
   "home": {
     "title": "모란AI - AI 소설 창작 & 독서 플랫폼",
     "subtitle": "AI로 당신만의 이야기 세계를 만들어보세요",
+    "noData": "데이터 없음",
     "trending": "인기 추천",
     "latest": "최신 업데이트",
     "recommended": "추천",

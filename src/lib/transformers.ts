@@ -105,7 +105,7 @@ export function toMockNovel(novel: {
   author: { id: string; name?: string | null; avatar?: string | null; image?: string | null; role?: string };
   category?: { name?: string | null } | null;
   novelTags?: Array<{ tag: { name: string } }>;
-  chapters?: Array<{ id: string; content: string }>;
+  chapters?: Array<{ id: string; content?: string }>;
   ratings?: Array<{ score: number }>;
   _count?: { favorites?: number; ratings?: number; chapters?: number };
 }): MockNovel {
@@ -115,7 +115,7 @@ export function toMockNovel(novel: {
       : 4.5;
   const ratingRounded = Math.round(avgRating * 10) / 10;
   const chapterCount = novel._count?.chapters ?? novel.chapters?.length ?? 0;
-  const totalWords = novel.chapters?.reduce((sum, ch) => sum + ch.content.length, 0) ?? 0;
+  const totalWords = novel.chapters?.reduce((sum, ch) => sum + (ch.content?.length ?? 0), 0) ?? 0;
 
   const statusMap: Record<string, "ongoing" | "completed" | "hiatus"> = {
     PUBLISHED: "ongoing",

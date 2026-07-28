@@ -41,6 +41,7 @@
   "home": {
     "title": "墨染AI - AI小説創作・読書プラットフォーム",
     "subtitle": "AIであなたの物語の世界を創造しよう",
+    "noData": "データがありません",
     "trending": "人気おすすめ",
     "latest": "最新アップデート",
     "recommended": "厳選おすすめ",
