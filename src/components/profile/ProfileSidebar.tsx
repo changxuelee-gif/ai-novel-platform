@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Link, usePathname } from "@/i18n/navigation";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ const navItems = [
 export function ProfileSidebar({ user, assets }: ProfileSidebarProps) {
   const t = useTranslations();
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <div className="w-72 shrink-0 bg-card border-r border-border/50 overflow-y-auto">
@@ -75,8 +76,8 @@ export function ProfileSidebar({ user, assets }: ProfileSidebarProps) {
 
         {/* Action Buttons */}
         <div className="flex gap-2 mb-4">
-          <Button size="sm" variant="outline" className="flex-1 text-xs">{t("profile.page.editProfile")}</Button>
-          <Button size="sm" className="flex-1 text-xs">{t("profile.page.startCreate")}</Button>
+          <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => router.push("/settings")}>{t("profile.page.editProfile")}</Button>
+          <Button size="sm" className="flex-1 text-xs" onClick={() => router.push("/create")}>{t("profile.page.startCreate")}</Button>
         </div>
 
         {/* Assets */}
