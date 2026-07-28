@@ -174,6 +174,43 @@ export const interactionRouter = router({
     }));
   }),
 
+  getFavorites: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+
+    const favorites = await ctx.prisma.favorite.findMany({
+      where: { userId },
+      include: {
+        novel: {
+          include: {
+            author: { select: { name: true } },
+            category: true,
+            _count: { select: { chapters: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return favorites;
+  }),
+
+  removeFavorite: protectedProcedure
+    .input(z.object({ novelId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const favorite = await ctx.prisma.favorite.findUnique({
+        where: { userId_novelId: { userId, novelId: input.novelId } },
+      });
+
+      if (!favorite) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Favorite not found" });
+      }
+
+      await ctx.prisma.favorite.delete({ where: { id: favorite.id } });
+      return { success: true };
+    }),
+
   getCommentsByNovel: publicProcedure
     .input(z.object({
       novelId: z.string(),

@@ -141,4 +141,17 @@ export const userRouter = router({
 
       return { earnings, total, page, limit };
     }),
+
+  getMyNovels: protectedProcedure.query(async ({ ctx }) => {
+    const novels = await ctx.prisma.novel.findMany({
+      where: { authorId: ctx.session.user.id },
+      include: {
+        category: true,
+        _count: { select: { chapters: true, favorites: true, comments: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return novels;
+  }),
 });

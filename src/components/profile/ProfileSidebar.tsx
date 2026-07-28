@@ -105,7 +105,10 @@ export function ProfileSidebar({ user, assets }: ProfileSidebarProps) {
       {/* Navigation */}
       <div className="px-2 pb-4">
         {navItems.map((item) => {
-          const isActive = pathname.includes(item.href.split("/")[1]);
+          const isActive =
+            pathname === item.href ||
+            (item.href !== "/profile" && pathname.startsWith(item.href + "/")) ||
+            (item.href === "/profile" && pathname === "/profile");
           return (
             <Link
               key={item.href}
