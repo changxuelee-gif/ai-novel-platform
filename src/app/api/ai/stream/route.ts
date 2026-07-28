@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-
-export const dynamic = "force-dynamic";
-
 import {
   getAIClient,
   buildContinuePrompt,
@@ -14,6 +11,8 @@ import {
   buildRandomStylePrompt,
 } from "@/lib/ai";
 import { checkQuota, recordUsage } from "@/lib/ai/quota";
+
+export const dynamic = "force-dynamic";
 
 const VALID_ACTIONS = [
   "continue",
@@ -64,7 +63,6 @@ function buildPrompt(action: Action, params: URLSearchParams): string {
 }
 
 export async function GET(request: NextRequest) {
-  // 1. 认证检查
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "未授权，请先登录" }, { status: 401 });
@@ -74,7 +72,6 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const action = params.get("action") as Action | null;
 
-  // 2. 校验 action
   if (!action || !VALID_ACTIONS.includes(action)) {
     return NextResponse.json(
       { error: `无效的 action，可选值：${VALID_ACTIONS.join(" | ")}` },
@@ -82,7 +79,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 3. 配额检查
   const quota = await checkQuota(userId);
   if (!quota.allowed) {
     return NextResponse.json(
@@ -91,7 +87,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 4. 构建 prompt
   let prompt: string;
   try {
     prompt = buildPrompt(action, params);
@@ -102,7 +97,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // 5. 创建 SSE 流
   const aiClient = getAIClient();
   const startTime = Date.now();
   let outputTokens = 0;
@@ -130,7 +124,6 @@ export async function GET(request: NextRequest) {
         );
         controller.close();
       } finally {
-        // 6. 记录使用量和审计日志
         const elapsed = Date.now() - startTime;
         const inputTokens = Math.ceil(prompt.length / 2);
         recordUsage(userId, action, inputTokens, outputTokens).catch(

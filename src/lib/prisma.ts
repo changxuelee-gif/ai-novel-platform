@@ -8,7 +8,6 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  // Remove sslmode from DATABASE_URL to avoid conflict with pg Pool ssl config
   const dbUrl = process.env.DATABASE_URL?.replace(/[?&]sslmode=\w+/, "") ?? "";
 
   const pool =
@@ -27,6 +26,16 @@ function createPrismaClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+let prismaClient: PrismaClient | undefined;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export function getPrisma(): PrismaClient {
+  if (!prismaClient) {
+    prismaClient = globalForPrisma.prisma ?? createPrismaClient();
+    if (process.env.NODE_ENV !== "production") {
+      globalForPrisma.prisma = prismaClient;
+    }
+  }
+  return prismaClient;
+}
+
+export const prisma = getPrisma();

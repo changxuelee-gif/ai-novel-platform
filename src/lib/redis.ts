@@ -1,30 +1,39 @@
 import { createClient } from "redis";
 
+type RedisClient = ReturnType<typeof createClient>;
+
 const globalForRedis = globalThis as unknown as {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  redis: any;
+  redis: RedisClient | undefined;
 };
 
-function createRedisClient() {
-  const client = createClient({
-    url: process.env.REDIS_URL,
-    socket: {
-      tls: true,
-      rejectUnauthorized: false,
-    },
-  });
+let redisClient: RedisClient | undefined;
 
-  client.on("error", (err) => {
-    console.error("Redis Client Error:", err);
-  });
+export function getRedis(): RedisClient {
+  if (!redisClient) {
+    const url = process.env.REDIS_URL || "";
+    const isTls = url.startsWith("rediss://");
 
-  if (!client.isOpen) {
-    client.connect().catch(console.error);
+    redisClient =
+      globalForRedis.redis ??
+      createClient({
+        url,
+        socket: isTls ? { tls: true, rejectUnauthorized: false } : undefined,
+      });
+
+    redisClient.on("error", (err) => {
+      console.error("Redis Client Error:", err);
+    });
+
+    if (process.env.NODE_ENV !== "production") {
+      globalForRedis.redis = redisClient;
+    }
   }
 
-  return client;
+  if (!redisClient.isOpen) {
+    redisClient.connect().catch((err) => {
+      console.error("Redis connect error:", err);
+    });
+  }
+
+  return redisClient;
 }
-
-export const redis = globalForRedis.redis ?? createRedisClient();
-
-if (process.env.NODE_ENV !== "production") globalForRedis.redis = redis;
