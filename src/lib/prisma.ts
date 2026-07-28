@@ -8,10 +8,13 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
+  // Remove sslmode from DATABASE_URL to avoid conflict with pg Pool ssl config
+  const dbUrl = process.env.DATABASE_URL?.replace(/[?&]sslmode=\w+/, "") ?? "";
+
   const pool =
     globalForPrisma.pool ??
     new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: dbUrl,
       ssl:
         process.env.NODE_ENV === "production"
           ? { rejectUnauthorized: false }
