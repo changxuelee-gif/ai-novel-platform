@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { useUIStore } from "@/stores/useUIStore";
 import { useLocaleStore } from "@/stores/useLocaleStore";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ const locales = [
 
 export function Navbar() {
   const t = useTranslations();
+  const router = useRouter();
   const { theme, setTheme } = useUIStore();
   const { setLocale } = useLocaleStore();
   const pathname = usePathname();
@@ -236,19 +237,19 @@ export function Navbar() {
                   <p className="text-xs text-muted-foreground">{session.user.email}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => window.location.href = "/profile"}>
+                <DropdownMenuItem onClick={() => router.push("/profile")}>
                   <User className="mr-2 h-4 w-4" />
                   {t("nav.profile")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => window.location.href = "/profile/bookshelf"}>
+                <DropdownMenuItem onClick={() => router.push("/profile/bookshelf")}>
                   <BookOpen className="mr-2 h-4 w-4" />
                   {t("nav.bookshelf")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => window.location.href = "/profile/history"}>
+                <DropdownMenuItem onClick={() => router.push("/profile/history")}>
                   <Clock className="mr-2 h-4 w-4" />
                   {t("profile.readingHistory")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => window.location.href = "/settings"}>
+                <DropdownMenuItem onClick={() => router.push("/settings")}>
                   <Settings className="mr-2 h-4 w-4" />
                   {t("nav.settings")}
                 </DropdownMenuItem>
