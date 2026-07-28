@@ -62,7 +62,7 @@ export default function RegisterPage() {
       if (result?.error) {
         setError(t("error.loginAfterRegister"));
       } else {
-        router.push("/");
+        router.push("/profile");
         router.refresh();
       }
     } catch {

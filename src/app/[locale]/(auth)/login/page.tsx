@@ -36,7 +36,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError(t("error.invalidCredentials"));
       } else {
-        router.push("/");
+        router.push("/profile");
         router.refresh();
       }
     } catch {
