@@ -52,7 +52,11 @@ interface StepStatus {
   subSteps?: { label: string; status: "pending" | "loading" | "done" }[];
 }
 
-export function OneClickCreation() {
+interface OneClickCreationProps {
+  onClose?: () => void;
+}
+
+export function OneClickCreation({ onClose }: OneClickCreationProps) {
   const {
     creationStep,
     creationData,
@@ -179,7 +183,11 @@ export function OneClickCreation() {
   const handleCancel = () => {
     chapterStream.cancel();
     quickCreate.reset();
-    resetCreationFlow();
+    if (onClose) {
+      onClose();
+    } else {
+      resetCreationFlow();
+    }
     setConcept("");
   };
 

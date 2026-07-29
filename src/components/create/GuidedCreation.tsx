@@ -80,7 +80,11 @@ const STEPS = [
   { key: 6, label: "确认", icon: "✨" },
 ];
 
-export function GuidedCreation() {
+interface GuidedCreationProps {
+  onClose?: () => void;
+}
+
+export function GuidedCreation({ onClose }: GuidedCreationProps) {
   const {
     creationStep,
     creationData,
@@ -1290,15 +1294,26 @@ export function GuidedCreation() {
 
         {creationStep <= 6 && (
           <div className="flex justify-between">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              disabled={creationStep === 1}
-              className={creationStep === 1 ? "invisible" : ""}
-            >
-              <ChevronLeft className="w-4 h-4 mr-2" />
-              上一步
-            </Button>
+            {creationStep === 1 ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (onClose) onClose();
+                  else resetCreationFlow();
+                }}
+              >
+                <X className="w-4 h-4 mr-2" />
+                退出创作
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={handleBack}
+              >
+                <ChevronLeft className="w-4 h-4 mr-2" />
+                上一步
+              </Button>
+            )}
             <Button
               onClick={handleNext}
               disabled={
