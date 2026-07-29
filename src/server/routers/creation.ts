@@ -125,7 +125,7 @@ function normalizeAIResponse(data: unknown, expectedShape: "metadata" | "worldvi
 
   // For outline shape: if data is an array (of chapters), wrap it
   if (expectedShape === "outline" && Array.isArray(data) && data.length > 1) {
-    return { chapters: data.map((item, idx) => {
+    return { chapters: data.map((item) => {
       if (typeof item === "object" && item !== null) {
         return normalizeAIResponse(item, "outline", depth + 1);
       }
