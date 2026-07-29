@@ -240,12 +240,11 @@ async function callAIWithJSON<T>(
   maxTokens: number,
   schema: z.ZodSchema<T>,
   expectedShape: "metadata" | "worldview" | "character" | "outline",
-  retries: number = 2
+  retries: number = 1
 ): Promise<T> {
-  const client = getAIClient();
-
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      const client = getAIClient();
       const result = await client.complete({
         systemPrompt: systemPrompt + "\n\n你必须只返回纯JSON对象，不要包含任何解释、说明、markdown代码块标记或其他文字。所有字段名必须使用英文。",
         prompt,
@@ -356,10 +355,10 @@ async function callAIWithJSON<T>(
           message: "AI服务繁忙，请稍后重试",
         });
       }
-      if (errorMessage.includes("timeout") || errorMessage.includes("network") || errorMessage.includes("fetch")) {
+      if (errorMessage.includes("timeout") || errorMessage.includes("timed out") || errorMessage.includes("network") || errorMessage.includes("connect") || errorMessage.includes("abort")) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "AI服务连接超时，请检查网络后重试",
+          message: "AI服务连接超时，请稍后重试",
         });
       }
       throw new TRPCError({

@@ -12,6 +12,7 @@ export interface AICompleteParams {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  timeoutMs?: number;
 }
 
 export interface AIClient {

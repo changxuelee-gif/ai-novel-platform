@@ -3,6 +3,7 @@ import type { AIClient, AICompleteParams } from "./types";
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 const DEFAULT_MODEL = "qwen-plus";
+const DEFAULT_TIMEOUT_MS = 50000; // 50 seconds (within Netlify's 26s pro / 10s free limit - will be overridden by netlify.toml)
 
 export class QwenClient implements AIClient {
   private apiKey: string;
@@ -57,6 +58,9 @@ export class QwenClient implements AIClient {
 
   async complete(params: AICompleteParams): Promise<string> {
     const body = this.buildRequestBody(params);
+    const timeoutMs = params.timeoutMs || DEFAULT_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     let response: Response;
     try {
@@ -64,10 +68,17 @@ export class QwenClient implements AIClient {
         method: "POST",
         headers: this.buildHeaders(),
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
-    } catch {
-      throw new Error(`Qwen API network error: unable to connect`);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`AI request timed out after ${timeoutMs / 1000}s. Please try again.`);
+      }
+      throw new Error(`AI API network error: unable to connect`);
     }
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       let errorText = "Unknown error";
@@ -76,8 +87,9 @@ export class QwenClient implements AIClient {
       } catch {
         // ignore
       }
+      console.error(`[QwenClient] API error ${response.status}: ${errorText.slice(0, 500)}`);
       throw new Error(
-        `Qwen API request failed (${response.status}): ${errorText.slice(0, 500)}`
+        `AI API request failed (${response.status}): ${errorText.slice(0, 300)}`
       );
     }
 
@@ -85,13 +97,13 @@ export class QwenClient implements AIClient {
     try {
       data = await response.json();
     } catch {
-      throw new Error("Qwen API returned invalid JSON response");
+      throw new Error("AI API returned invalid JSON response");
     }
 
     const content = data?.choices?.[0]?.message?.content;
     if (!content || typeof content !== "string") {
       console.error("[QwenClient] Unexpected API response structure:", JSON.stringify(data).slice(0, 500));
-      throw new Error("Qwen API returned unexpected response format");
+      throw new Error("AI API returned unexpected response format");
     }
 
     return content;
@@ -101,22 +113,28 @@ export class QwenClient implements AIClient {
     params: AICompleteParams
   ): AsyncIterable<string> {
     const body = this.buildRequestBody(params, true);
+    const timeoutMs = (params.timeoutMs || DEFAULT_TIMEOUT_MS) * 2; // longer for streams
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const response = await fetch(DASHSCOPE_API_URL, {
       method: "POST",
       headers: this.buildHeaders(),
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
+      clearTimeout(timeoutId);
       const errorText = await response.text();
       throw new Error(
-        `Qwen API stream request failed (${response.status}): ${errorText}`
+        `AI API stream request failed (${response.status}): ${errorText}`
       );
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
+      clearTimeout(timeoutId);
       throw new Error("Response body is not readable for streaming");
     }
 
@@ -127,6 +145,9 @@ export class QwenClient implements AIClient {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        // Reset timeout on each chunk received
+        clearTimeout(timeoutId);
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -149,7 +170,13 @@ export class QwenClient implements AIClient {
           }
         }
       }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`AI stream timed out after ${timeoutMs / 1000}s`);
+      }
+      throw err;
     } finally {
+      clearTimeout(timeoutId);
       reader.releaseLock();
     }
   }
