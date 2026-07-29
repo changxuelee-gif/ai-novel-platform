@@ -234,7 +234,7 @@ export function AiAssistantPanel() {
   }, []);
 
   const handleRegenerate = useCallback(
-    (_message: AiMessage) => {
+    () => {
       setAiGenerating(true);
       setShowTyping(true);
 
@@ -455,7 +455,7 @@ export function AiAssistantPanel() {
                         <Button
                           variant="ghost"
                           size="icon-xs"
-                          onClick={() => handleRegenerate(msg)}
+                          onClick={() => handleRegenerate()}
                           disabled={aiGenerating}
                           title={t("regenerate")}
                         >
