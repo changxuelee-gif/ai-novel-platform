@@ -8,6 +8,8 @@ import type {
   CreationOutlineChapter,
 } from "@/stores/useCreateStore";
 
+type QuickCreateStep = "idle" | "metadata" | "worldview" | "character" | "outline" | "chapters" | "done";
+
 interface QuickCreateData {
   metadata: CreationMetadata;
   worldview: string;
@@ -21,43 +23,124 @@ interface UseQuickCreateResult {
   error: string | null;
   data: QuickCreateData | null;
   reset: () => void;
+  currentStep: QuickCreateStep;
 }
 
-export function useQuickCreate(): UseQuickCreateResult {
-  const mutation = trpc.creation.quickCreateNovel.useMutation();
-  const [data, setData] = useState<QuickCreateData | null>(null);
+const isAuthError = (message: string) => {
+  return message.includes("UNAUTHORIZED") || message.includes("未登录") || message.includes("401") || message.includes("Not authenticated");
+};
 
-  const generate = useCallback(
-    (concept: string) => {
-      mutation.mutate(
-        { concept },
-        {
-          onSuccess: (result) => {
-            setData({
-              metadata: result.metadata,
-              worldview: result.worldview,
-              character: result.character,
-              outline: result.outline,
-            });
-          },
-          onError: () => {},
-        }
-      );
-    },
-    [mutation]
-  );
+export function useQuickCreate(): UseQuickCreateResult {
+  const [data, setData] = useState<QuickCreateData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState<QuickCreateStep>("idle");
+  const cancelledRef = useRef(false);
+
+  const metadataMutation = trpc.creation.generateMetadata.useMutation();
+  const worldviewMutation = trpc.creation.generateWorldview.useMutation();
+  const characterMutation = trpc.creation.generateCharacter.useMutation();
+  const outlineMutation = trpc.creation.generateOutline.useMutation();
 
   const reset = useCallback(() => {
+    cancelledRef.current = true;
+    setLoading(false);
+    setError(null);
     setData(null);
-    mutation.reset();
-  }, [mutation]);
+    setCurrentStep("idle");
+    metadataMutation.reset();
+    worldviewMutation.reset();
+    characterMutation.reset();
+    outlineMutation.reset();
+  }, [metadataMutation, worldviewMutation, characterMutation, outlineMutation]);
+
+  const generate = useCallback(
+    async (concept: string) => {
+      cancelledRef.current = false;
+      setLoading(true);
+      setError(null);
+      setData(null);
+
+      try {
+        // Step 1: Generate metadata
+        setCurrentStep("metadata");
+        const metadata = await metadataMutation.mutateAsync({ concept });
+        if (cancelledRef.current) return;
+
+        // Step 2: Generate worldview
+        setCurrentStep("worldview");
+        const worldviewResult = await worldviewMutation.mutateAsync({
+          concept,
+          title: metadata.title,
+          category: metadata.category,
+          tags: metadata.tags,
+          summary: metadata.summary,
+        });
+        if (cancelledRef.current) return;
+
+        // Step 3: Generate character
+        setCurrentStep("character");
+        const character = await characterMutation.mutateAsync({
+          concept,
+          title: metadata.title,
+          category: metadata.category,
+          tags: metadata.tags,
+          summary: metadata.summary,
+          worldview: worldviewResult.worldview,
+        });
+        if (cancelledRef.current) return;
+
+        // Step 4: Generate outline (3 chapters for quick mode)
+        setCurrentStep("outline");
+        const outlineResult = await outlineMutation.mutateAsync({
+          concept,
+          title: metadata.title,
+          category: metadata.category,
+          tags: metadata.tags,
+          summary: metadata.summary,
+          worldview: worldviewResult.worldview,
+          character,
+          chapterCount: 3,
+        });
+        if (cancelledRef.current) return;
+
+        setCurrentStep("chapters");
+        setData({
+          metadata,
+          worldview: worldviewResult.worldview,
+          character,
+          outline: outlineResult.chapters.slice(0, 3),
+        });
+      } catch (err) {
+        if (cancelledRef.current) return;
+        const message = err instanceof Error ? err.message : "生成失败，请重试";
+        if (isAuthError(message)) {
+          setError("请先登录后使用AI创作");
+        } else {
+          setError(message);
+        }
+        setLoading(false);
+        setCurrentStep("idle");
+      }
+    },
+    [metadataMutation, worldviewMutation, characterMutation, outlineMutation]
+  );
+
+  // When data is set and we're in chapters step, mark loading as done when chapters start streaming
+  useEffect(() => {
+    if (data && currentStep === "chapters") {
+      setLoading(false);
+      setCurrentStep("done");
+    }
+  }, [data, currentStep]);
 
   return {
     generate,
-    loading: mutation.isPending,
-    error: mutation.error?.message ?? null,
+    loading: loading || currentStep === "chapters",
+    error,
     data,
     reset,
+    currentStep,
   };
 }
 
@@ -147,8 +230,14 @@ export function useChapterStream(
           });
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `请求失败: ${response.status}`);
+            let errorMsg = `请求失败: ${response.status}`;
+            try {
+              const errorData = await response.json();
+              errorMsg = errorData.error || errorMsg;
+            } catch {
+              // ignore
+            }
+            throw new Error(errorMsg);
           }
 
           const reader = response.body?.getReader();
@@ -221,7 +310,7 @@ export function useChapterStream(
                     return;
                   }
                 } catch {
-                  // Not JSON, treat as text
+                  // Not JSON error, treat as content
                 }
               }
 

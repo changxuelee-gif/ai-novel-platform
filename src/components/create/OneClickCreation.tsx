@@ -74,7 +74,7 @@ export function OneClickCreation() {
   const [isCreatingNovel, setIsCreatingNovel] = useState(false);
 
   const quickCreate = useQuickCreate();
-  const chapterStream = useChapterStream();
+  const chapterStream = useChapterStream({ autoContinue: true });
   const createNovelMutation = trpc.creation.createNovelWithAI.useMutation();
 
   useEffect(() => {
@@ -268,39 +268,47 @@ export function OneClickCreation() {
   };
 
   const getSteps = (): StepStatus[] => {
+    const { currentStep } = quickCreate;
     const hasMetadata = !!creationData.metadata;
     const hasWorldview = !!creationData.worldview;
     const hasCharacter = !!creationData.character;
     const hasOutline = !!creationData.outline;
     const chapters = creationData.generatedChapters || [];
     const currentChapter = creationData.currentGeneratingChapter ?? 0;
+    const isStepDone = (step: string) => {
+      const stepOrder = ["metadata", "worldview", "character", "outline", "chapters"];
+      const currentIdx = stepOrder.indexOf(currentStep);
+      const stepIdx = stepOrder.indexOf(step);
+      return currentIdx > stepIdx || (currentStep === "done");
+    };
+    const isStepLoading = (step: string) => currentStep === step;
 
     return [
       {
         label: "生成作品信息",
-        status: hasMetadata ? "done" : quickCreate.loading ? "loading" : "pending",
+        status: hasMetadata || isStepDone("metadata") ? "done" : isStepLoading("metadata") ? "loading" : "pending",
       },
       {
         label: "构建世界观",
-        status: hasWorldview
+        status: hasWorldview || isStepDone("worldview")
           ? "done"
-          : hasMetadata && quickCreate.loading
+          : isStepLoading("worldview")
           ? "loading"
           : "pending",
       },
       {
         label: "设计人物",
-        status: hasCharacter
+        status: hasCharacter || isStepDone("character")
           ? "done"
-          : hasWorldview && quickCreate.loading
+          : isStepLoading("character")
           ? "loading"
           : "pending",
       },
       {
         label: "生成大纲",
-        status: hasOutline
+        status: hasOutline || isStepDone("outline")
           ? "done"
-          : hasCharacter && quickCreate.loading
+          : isStepLoading("outline")
           ? "loading"
           : "pending",
       },
@@ -308,7 +316,7 @@ export function OneClickCreation() {
         label: "撰写正文",
         status: chapters.length >= 3
           ? "done"
-          : hasOutline
+          : hasOutline || isStepDone("outline") || isStepLoading("chapters") || chapterStream.loading
           ? "loading"
           : "pending",
         subSteps: [0, 1, 2].map((i) => ({

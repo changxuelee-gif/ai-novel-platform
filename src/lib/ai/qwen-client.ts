@@ -58,21 +58,43 @@ export class QwenClient implements AIClient {
   async complete(params: AICompleteParams): Promise<string> {
     const body = this.buildRequestBody(params);
 
-    const response = await fetch(DASHSCOPE_API_URL, {
-      method: "POST",
-      headers: this.buildHeaders(),
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+    try {
+      response = await fetch(DASHSCOPE_API_URL, {
+        method: "POST",
+        headers: this.buildHeaders(),
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error(`Qwen API network error: unable to connect`);
+    }
 
     if (!response.ok) {
-      const errorText = await response.text();
+      let errorText = "Unknown error";
+      try {
+        errorText = await response.text();
+      } catch {
+        // ignore
+      }
       throw new Error(
-        `Qwen API request failed (${response.status}): ${errorText}`
+        `Qwen API request failed (${response.status}): ${errorText.slice(0, 500)}`
       );
     }
 
-    const data = await response.json();
-    return data.choices[0].message.content;
+    let data: { choices?: Array<{ message?: { content?: string } }> };
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Qwen API returned invalid JSON response");
+    }
+
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content || typeof content !== "string") {
+      console.error("[QwenClient] Unexpected API response structure:", JSON.stringify(data).slice(0, 500));
+      throw new Error("Qwen API returned unexpected response format");
+    }
+
+    return content;
   }
 
   async *completeStream(
