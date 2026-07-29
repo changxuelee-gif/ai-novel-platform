@@ -114,10 +114,23 @@ function extractJSON(text: string): unknown | null {
  * - Wrapped objects ({"character": {...}}, {"主角": {...}}, [ {...} ])
  * - String numbers → actual numbers
  */
-function normalizeAIResponse(data: unknown, expectedShape: "metadata" | "worldview" | "character" | "outline"): unknown {
+function normalizeAIResponse(data: unknown, expectedShape: "metadata" | "worldview" | "character" | "outline", depth = 0): unknown {
+  // Prevent infinite recursion
+  if (depth > 5) return data;
+
   // If it's an array with one element, unwrap
   if (Array.isArray(data) && data.length === 1) {
     data = data[0];
+  }
+
+  // For outline shape: if data is an array (of chapters), wrap it
+  if (expectedShape === "outline" && Array.isArray(data) && data.length > 1) {
+    return { chapters: data.map((item, idx) => {
+      if (typeof item === "object" && item !== null) {
+        return normalizeAIResponse(item, "outline", depth + 1);
+      }
+      return item;
+    }) };
   }
 
   if (typeof data !== "object" || data === null) return data;
@@ -170,7 +183,7 @@ function normalizeAIResponse(data: unknown, expectedShape: "metadata" | "worldvi
         k => fieldMap[k.toLowerCase()] || fieldMap[k] || Object.values(fieldMap).includes(k)
       );
       if (matchingFields.length >= 2) {
-        return normalizeAIResponse(wrapped, expectedShape);
+        return normalizeAIResponse(wrapped, expectedShape, depth + 1);
       }
     }
   }
@@ -184,14 +197,10 @@ function normalizeAIResponse(data: unknown, expectedShape: "metadata" | "worldvi
 
     // Recursively normalize nested objects for outline
     if (expectedShape === "outline" && mappedKey === "chapters" && Array.isArray(value)) {
-      normalized[mappedKey] = value.map((item: unknown) => normalizeAIResponse(item, "outline"));
-    } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      normalized[mappedKey] = value.map((item: unknown) => normalizeAIResponse(item, "outline", depth + 1));
+    } else if (expectedShape === "outline" && typeof value === "object" && value !== null && !Array.isArray(value)) {
       // For nested chapter objects, normalize them
-      if (expectedShape === "outline") {
-        normalized[mappedKey] = normalizeAIResponse(value, "outline");
-      } else {
-        normalized[mappedKey] = value;
-      }
+      normalized[mappedKey] = normalizeAIResponse(value, "outline", depth + 1);
     } else {
       normalized[mappedKey] = value;
     }
@@ -238,11 +247,10 @@ async function callAIWithJSON<T>(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const result = await client.complete({
-        systemPrompt,
+        systemPrompt: systemPrompt + "\n\n你必须只返回纯JSON对象，不要包含任何解释、说明、markdown代码块标记或其他文字。所有字段名必须使用英文。",
         prompt,
         temperature,
         maxTokens,
-        jsonMode: true,
       });
 
       if (!result || typeof result !== "string") {
@@ -276,7 +284,12 @@ async function callAIWithJSON<T>(
       }
 
       // Normalize the response (handle Chinese field names, wrapped objects, string numbers)
-      parsed = normalizeAIResponse(parsed, expectedShape);
+      try {
+        parsed = normalizeAIResponse(parsed, expectedShape);
+      } catch (normError) {
+        console.warn(`[AI] Normalization error on attempt ${attempt + 1}:`, normError instanceof Error ? normError.message : normError);
+        // Continue with the un-normalized parsed data - let zod try to validate it
+      }
 
       let validated: T;
       try {
@@ -392,7 +405,7 @@ export const creationRouter = router({
         systemPrompt,
         prompt,
         0.3,
-        1024,
+        2048,
         metadataSchema,
         "metadata"
       );
@@ -488,7 +501,7 @@ export const creationRouter = router({
         systemPrompt,
         prompt,
         0.7,
-        1024,
+        2048,
         characterSchema,
         "character"
       );
@@ -709,7 +722,7 @@ export const creationRouter = router({
           metaSys,
           metaPrompt,
           0.3,
-          1024,
+          2048,
           metadataSchema,
           "metadata"
         );
@@ -743,7 +756,7 @@ export const creationRouter = router({
           charSys,
           charPrompt,
           0.7,
-          1024,
+          2048,
           characterSchema,
           "character"
         );
