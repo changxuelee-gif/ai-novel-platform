@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { WorkPanel } from "@/components/create/WorkPanel";
 import { EditorArea } from "@/components/create/EditorArea";
@@ -15,8 +14,11 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { useCreateStore } from "@/stores/useCreateStore";
 
-export default function CreatePage() {
-  const searchParams = useSearchParams();
+interface CreatePageProps {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+export default function CreatePage({ searchParams }: CreatePageProps) {
   const {
     creationMode,
     creationModeDialogOpen,
@@ -28,7 +30,7 @@ export default function CreatePage() {
   } = useCreateStore();
 
   useEffect(() => {
-    if (searchParams.get("ai") === "true") {
+    if (searchParams?.ai === "true") {
       setCreationModeDialogOpen(true);
     }
   }, [searchParams, setCreationModeDialogOpen]);
