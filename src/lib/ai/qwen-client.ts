@@ -2,8 +2,8 @@ import type { AIClient, AICompleteParams } from "./types";
 
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-const DEFAULT_MODEL = "qwen-plus";
-const DEFAULT_TIMEOUT_MS = 50000; // 50 seconds (within Netlify's 26s pro / 10s free limit - will be overridden by netlify.toml)
+const DEFAULT_MODEL = process.env.AI_MODEL || "qwen-plus";
+const DEFAULT_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 25000; // 25 seconds (matches Netlify Pro 26s limit; free tier is 10s)
 
 export class QwenClient implements AIClient {
   private apiKey: string;
