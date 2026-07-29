@@ -327,7 +327,10 @@ async function callAIWithJSON<T>(
         });
       }
 
-      await recordUsage(userId, action, prompt.length, cleanedResult.length);
+      // Fire-and-forget usage tracking - don't let DB errors fail the response after AI already succeeded
+      recordUsage(userId, action, prompt.length, cleanedResult.length).catch((err: unknown) => {
+        console.error(`[AI] Failed to record usage for ${action}:`, err);
+      });
       logAIAudit({
         userId,
         action,
