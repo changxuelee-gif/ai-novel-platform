@@ -2,12 +2,6 @@
   command = "npx prisma generate && npx prisma db push --accept-data-loss && npm run build"
   publish = ".next"
 
-[functions]
-  node_bundler = "esbuild"
-  # Netlify free tier has 10s function timeout; Pro tier supports up to 26s
-  # This setting is respected on Pro plans
-  timeout = 26
-
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
