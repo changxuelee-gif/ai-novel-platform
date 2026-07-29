@@ -42,6 +42,7 @@ function createSSEStream(
           prompt,
           temperature: 0.7,
           maxTokens: 4096,
+          useFastModel: true, // Chapter generation is the longest task, always use fast model
         });
 
         for await (const chunk of chunks) {

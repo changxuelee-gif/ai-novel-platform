@@ -2,8 +2,11 @@ import type { AIClient, AICompleteParams } from "./types";
 
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-const DEFAULT_MODEL = process.env.AI_MODEL || "qwen-plus";
-const DEFAULT_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 25000; // 25 seconds (matches Netlify Pro 26s limit; free tier is 10s)
+// Quality model for short/fast tasks (metadata, etc.) - stays within 10s Netlify limit
+const QUALITY_MODEL = "qwen-plus";
+// Fast model for long-running tasks (configured via AI_MODEL env var, falls back to qwen-turbo)
+const FAST_MODEL = process.env.AI_MODEL || "qwen-turbo";
+const DEFAULT_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 25000; // 25s default (Netlify Pro=26s); free tier 10s limit handled by fast model selection
 
 export class QwenClient implements AIClient {
   private apiKey: string;
@@ -34,8 +37,14 @@ export class QwenClient implements AIClient {
 
     messages.push({ role: "user", content: params.prompt });
 
+    // Select model: explicit model param > useFastModel > default quality model
+    let selectedModel = params.model;
+    if (!selectedModel) {
+      selectedModel = params.useFastModel ? FAST_MODEL : QUALITY_MODEL;
+    }
+
     const body: Record<string, unknown> = {
-      model: params.model || DEFAULT_MODEL,
+      model: selectedModel,
       messages,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 2048,

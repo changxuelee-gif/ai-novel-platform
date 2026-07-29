@@ -75,7 +75,7 @@ function createSSEStream(
   return new ReadableStream({
     async start(controller) {
       try {
-        const chunks = aiClient.completeStream({ prompt });
+        const chunks = aiClient.completeStream({ prompt, useFastModel: true });
 
         for await (const chunk of chunks) {
           outputTokens++;

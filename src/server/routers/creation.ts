@@ -242,6 +242,10 @@ async function callAIWithJSON<T>(
   expectedShape: "metadata" | "worldview" | "character" | "outline",
   retries: number = 1
 ): Promise<T> {
+  // Use fast model for long-running tasks (worldview, character, outline) to stay within Netlify timeout limits;
+  // metadata generation is short/structured, use quality model for better accuracy
+  const useFastModel = expectedShape !== "metadata";
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const client = getAIClient();
@@ -250,6 +254,7 @@ async function callAIWithJSON<T>(
         prompt,
         temperature,
         maxTokens,
+        useFastModel,
       });
 
       if (!result || typeof result !== "string") {

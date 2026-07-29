@@ -13,6 +13,8 @@ export interface AICompleteParams {
   maxTokens?: number;
   jsonMode?: boolean;
   timeoutMs?: number;
+  /** Use the faster model configured via AI_MODEL env var (for long-running tasks) */
+  useFastModel?: boolean;
 }
 
 export interface AIClient {

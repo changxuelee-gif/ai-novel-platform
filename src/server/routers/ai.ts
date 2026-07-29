@@ -36,7 +36,7 @@ export const aiRouter = router({
 
       const prompt = buildContinuePrompt(input.context, input.character, input.style);
       const client = getAIClient();
-      const result = await client.complete({ prompt });
+      const result = await client.complete({ prompt, useFastModel: true });
 
       const safety = checkContentSafety(result);
       if (!safety.passed) {
@@ -46,7 +46,8 @@ export const aiRouter = router({
         });
       }
 
-      await recordUsage(userId, "continue", prompt.length, result.length);
+      // Fire-and-forget usage tracking
+      recordUsage(userId, "continue", prompt.length, result.length).catch(() => {});
       logAIAudit({
         userId,
         action: "continue",
@@ -78,7 +79,7 @@ export const aiRouter = router({
 
       const prompt = buildInspirePrompt(input.chapterContent, input.setting);
       const client = getAIClient();
-      const result = await client.complete({ prompt });
+      const result = await client.complete({ prompt, useFastModel: true });
 
       const safety = checkContentSafety(result);
       if (!safety.passed) {
@@ -88,7 +89,7 @@ export const aiRouter = router({
         });
       }
 
-      await recordUsage(userId, "inspire", prompt.length, result.length);
+      recordUsage(userId, "inspire", prompt.length, result.length).catch(() => {});
       logAIAudit({
         userId,
         action: "inspire",
@@ -126,7 +127,7 @@ export const aiRouter = router({
       };
       const prompt = buildRewritePrompt(input.text, modeMap[input.mode]);
       const client = getAIClient();
-      const result = await client.complete({ prompt });
+      const result = await client.complete({ prompt, useFastModel: true });
 
       const safety = checkContentSafety(result);
       if (!safety.passed) {
@@ -136,7 +137,7 @@ export const aiRouter = router({
         });
       }
 
-      await recordUsage(userId, "rewrite", prompt.length, result.length);
+      recordUsage(userId, "rewrite", prompt.length, result.length).catch(() => {});
       logAIAudit({
         userId,
         action: "rewrite",
@@ -173,7 +174,7 @@ export const aiRouter = router({
 
       const prompt = buildDialoguePrompt(input.characters, input.situation);
       const client = getAIClient();
-      const result = await client.complete({ prompt });
+      const result = await client.complete({ prompt, useFastModel: true });
 
       const safety = checkContentSafety(result);
       if (!safety.passed) {
@@ -183,7 +184,7 @@ export const aiRouter = router({
         });
       }
 
-      await recordUsage(userId, "dialogue", prompt.length, result.length);
+      recordUsage(userId, "dialogue", prompt.length, result.length).catch(() => {});
       logAIAudit({
         userId,
         action: "dialogue",
@@ -216,7 +217,7 @@ export const aiRouter = router({
 
       const prompt = buildOutlinePrompt(input.worldView, input.protagonist, input.conflict);
       const client = getAIClient();
-      const result = await client.complete({ prompt });
+      const result = await client.complete({ prompt, useFastModel: true });
 
       const safety = checkContentSafety(result);
       if (!safety.passed) {
@@ -226,7 +227,7 @@ export const aiRouter = router({
         });
       }
 
-      await recordUsage(userId, "outline", prompt.length, result.length);
+      recordUsage(userId, "outline", prompt.length, result.length).catch(() => {});
       logAIAudit({
         userId,
         action: "outline",
@@ -257,7 +258,7 @@ export const aiRouter = router({
 
       const prompt = buildRandomCharacterPrompt(input.tags);
       const client = getAIClient();
-      const result = await client.complete({ prompt });
+      const result = await client.complete({ prompt, useFastModel: true });
 
       const safety = checkContentSafety(result);
       if (!safety.passed) {
@@ -267,7 +268,7 @@ export const aiRouter = router({
         });
       }
 
-      await recordUsage(userId, "randomCharacter", prompt.length, result.length);
+      recordUsage(userId, "randomCharacter", prompt.length, result.length).catch(() => {});
       logAIAudit({
         userId,
         action: "randomCharacter",
@@ -298,7 +299,7 @@ export const aiRouter = router({
 
       const prompt = buildRandomStylePrompt(input.tags);
       const client = getAIClient();
-      const result = await client.complete({ prompt });
+      const result = await client.complete({ prompt, useFastModel: true });
 
       const safety = checkContentSafety(result);
       if (!safety.passed) {
@@ -308,7 +309,7 @@ export const aiRouter = router({
         });
       }
 
-      await recordUsage(userId, "randomStyle", prompt.length, result.length);
+      recordUsage(userId, "randomStyle", prompt.length, result.length).catch(() => {});
       logAIAudit({
         userId,
         action: "randomStyle",
