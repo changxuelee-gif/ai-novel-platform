@@ -60,7 +60,6 @@ export const novelRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Novel not found" });
       }
 
-      // Increment view count
       await ctx.prisma.novel.update({
         where: { id: input.id },
         data: { views: { increment: 1 } },
@@ -77,15 +76,35 @@ export const novelRouter = router({
         cover: z.string().optional(),
         tags: z.array(z.string()).optional(),
         categoryId: z.string().optional(),
+        categoryName: z.string().optional(),
         aiAssisted: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { tags, ...novelData } = input;
+      const { tags, categoryName, ...novelData } = input;
+
+      let categoryId = novelData.categoryId;
+
+      if (categoryName) {
+        const slug = categoryName
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9\u4e00-\u9fa5-]/g, "");
+        const category = await ctx.prisma.category.upsert({
+          where: { name: categoryName },
+          update: {},
+          create: {
+            name: categoryName,
+            slug: slug || `category-${Date.now()}`,
+          },
+        });
+        categoryId = category.id;
+      }
 
       const novel = await ctx.prisma.novel.create({
         data: {
           ...novelData,
+          categoryId,
           authorId: ctx.session.user.id,
           ...(tags && tags.length > 0
             ? {
@@ -106,11 +125,21 @@ export const novelRouter = router({
         },
         include: {
           author: { select: { id: true, name: true, avatar: true } },
+          category: true,
           novelTags: { include: { tag: true } },
         },
       });
 
-      return novel;
+      const firstChapter = await ctx.prisma.chapter.create({
+        data: {
+          title: "第一章",
+          content: "",
+          order: 1,
+          novelId: novel.id,
+        },
+      });
+
+      return { novel, firstChapter };
     }),
 
   update: protectedProcedure

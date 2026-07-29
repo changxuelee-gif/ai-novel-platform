@@ -129,7 +129,7 @@ export function Navbar() {
                 <PenSquare className="mr-2 h-4 w-4" />
                 {t("create.newNovel")}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push("/create")}>
+              <DropdownMenuItem onClick={() => router.push("/create?ai=true")}>
                 <BookOpen className="mr-2 h-4 w-4" />
                 {t("create.quickStart")}
               </DropdownMenuItem>

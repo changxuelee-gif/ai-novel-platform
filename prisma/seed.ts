@@ -97,12 +97,20 @@ async function main() {
   console.log("📂 Creating categories...");
 
   const categoriesData = [
-    { id: categoryIds[0], name: "Fantasy", slug: "fantasy", icon: "🧙" },
-    { id: categoryIds[1], name: "Romance", slug: "romance", icon: "💕" },
-    { id: categoryIds[2], name: "Sci-Fi", slug: "sci-fi", icon: "🚀" },
-    { id: categoryIds[3], name: "Horror", slug: "horror", icon: "👻" },
-    { id: categoryIds[4], name: "Mystery", slug: "mystery", icon: "🔍" },
-    { id: categoryIds[5], name: "Adventure", slug: "adventure", icon: "⚔️" },
+    { id: categoryIds[0], name: "玄幻", slug: "xuanhuan", icon: "🧙" },
+    { id: categoryIds[1], name: "都市", slug: "dushi", icon: "🏙️" },
+    { id: categoryIds[2], name: "仙侠", slug: "xianxia", icon: "⚔️" },
+    { id: categoryIds[3], name: "科幻", slug: "kehuan", icon: "🚀" },
+    { id: categoryIds[4], name: "竞技", slug: "jingji", icon: "🏆" },
+    { id: categoryIds[5], name: "历史", slug: "lishi", icon: "📜" },
+    { id: "category7", name: "悬疑", slug: "xuanyi", icon: "🔍" },
+    { id: "category8", name: "言情", slug: "yanqing", icon: "💕" },
+    { id: "category9", name: "Fantasy", slug: "fantasy", icon: "🧙" },
+    { id: "category10", name: "Romance", slug: "romance", icon: "💕" },
+    { id: "category11", name: "Sci-Fi", slug: "sci-fi", icon: "🚀" },
+    { id: "category12", name: "Horror", slug: "horror", icon: "👻" },
+    { id: "category13", name: "Mystery", slug: "mystery", icon: "🔍" },
+    { id: "category14", name: "Adventure", slug: "adventure", icon: "⚔️" },
   ];
 
   for (const c of categoriesData) {

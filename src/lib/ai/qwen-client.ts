@@ -2,37 +2,50 @@ import type { AIClient, AICompleteParams } from "./types";
 
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
-const DEFAULT_MODEL = "qwen3-plus";
+const DEFAULT_MODEL = "qwen-plus";
 
 export class QwenClient implements AIClient {
   private apiKey: string;
 
   constructor() {
-    const apiKey = process.env.DASHSCOPE_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY || process.env.DASHSCOPE_API_KEY;
     if (!apiKey) {
       throw new Error(
-        "Missing DASHSCOPE_API_KEY environment variable. Please set it in your .env file."
+        "Missing OPENAI_API_KEY or DASHSCOPE_API_KEY environment variable. Please set it in your .env file."
       );
     }
     this.apiKey = apiKey;
   }
 
   private buildRequestBody(params: AICompleteParams, stream = false) {
-    const messages = [
-      { role: "user", content: params.prompt },
-    ];
+    const messages: Array<{ role: string; content: string }> = [];
 
-    if (params.context) {
-      messages.unshift({ role: "system", content: params.context });
+    let systemContent = params.systemPrompt || params.context || "";
+    if (params.jsonMode) {
+      systemContent = systemContent
+        ? `${systemContent}\n\n请以JSON格式输出`
+        : "请以JSON格式输出";
     }
 
-    return {
+    if (systemContent) {
+      messages.push({ role: "system", content: systemContent });
+    }
+
+    messages.push({ role: "user", content: params.prompt });
+
+    const body: Record<string, unknown> = {
       model: params.model || DEFAULT_MODEL,
       messages,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 2048,
       stream,
     };
+
+    if (params.jsonMode) {
+      body.response_format = { type: "json_object" };
+    }
+
+    return body;
   }
 
   private buildHeaders() {
@@ -95,7 +108,6 @@ export class QwenClient implements AIClient {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        // Keep the last potentially incomplete line in the buffer
         buffer = lines.pop() || "";
 
         for (const line of lines) {
@@ -112,7 +124,6 @@ export class QwenClient implements AIClient {
               yield content;
             }
           } catch {
-            // Skip malformed JSON lines
           }
         }
       }

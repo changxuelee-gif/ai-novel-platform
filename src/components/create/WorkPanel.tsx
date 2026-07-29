@@ -25,6 +25,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -286,6 +287,9 @@ export function WorkPanel() {
   const setNewNovelDialogOpen = useCreateStore(
     (s) => s.setNewNovelDialogOpen
   );
+  const setCreationModeDialogOpen = useCreateStore(
+    (s) => s.setCreationModeDialogOpen
+  );
   const addChapter = useCreateStore((s) => s.addChapter);
   const updateChapter = useCreateStore((s) => s.updateChapter);
   const deleteChapter = useCreateStore((s) => s.deleteChapter);
@@ -390,9 +394,17 @@ export function WorkPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* 新建作品按钮 */}
-      <div className="p-3 pb-2">
+      <div className="p-3 pb-2 space-y-2">
         <Button
-          className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+          className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg shadow-violet-500/25"
+          onClick={() => setCreationModeDialogOpen(true)}
+        >
+          <Sparkles className="size-4" />
+          智能创作
+        </Button>
+        <Button
+          variant="outline"
+          className="w-full"
           onClick={() => setNewNovelDialogOpen(true)}
         >
           <Plus className="size-4" />

@@ -7,9 +7,11 @@ export interface AIGenerationOptions {
 export interface AICompleteParams {
   prompt: string;
   context?: string;
+  systemPrompt?: string;
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  jsonMode?: boolean;
 }
 
 export interface AIClient {

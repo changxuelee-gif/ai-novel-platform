@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { extractChapterSummary, countWords } from "@/lib/ai/chapter-utils";
 
 export interface ChapterItem {
   id: string;
@@ -33,6 +34,50 @@ export interface AiMessage {
   actions?: string[];
 }
 
+export interface CreationCharacter {
+  name: string;
+  gender: string;
+  age: number;
+  personality: string;
+  background: string;
+  goal: string;
+  appearance: string;
+}
+
+export interface CreationOutlineChapter {
+  order: number;
+  title: string;
+  summary: string;
+}
+
+export interface CreationGeneratedChapter {
+  title: string;
+  content: string;
+  summary?: string;
+  order: number;
+  wordCount: number;
+}
+
+export interface CreationMetadata {
+  title: string;
+  category: string;
+  tags: string[];
+  summary: string;
+}
+
+export interface CreationData {
+  concept?: string;
+  selectedCategory?: string;
+  selectedTags?: string[];
+  metadata?: CreationMetadata;
+  worldview?: string;
+  character?: CreationCharacter;
+  outline?: CreationOutlineChapter[];
+  generatedChapters?: CreationGeneratedChapter[];
+  currentGeneratingChapter?: number;
+  chapterStreamContent?: string;
+}
+
 interface CreateState {
   // 作品与章节
   novels: NovelItem[];
@@ -55,6 +100,14 @@ interface CreateState {
   // UI 状态
   newNovelDialogOpen: boolean;
   publishDialogOpen: boolean;
+
+  // AI创作流程
+  creationMode: "oneclick" | "guided" | null;
+  creationStep: number;
+  creationData: CreationData;
+  creationLoading: boolean;
+  creationError: string | null;
+  creationModeDialogOpen: boolean;
 
   // Actions - 作品
   setNovels: (novels: NovelItem[]) => void;
@@ -87,7 +140,19 @@ interface CreateState {
 
   // Actions - 作品管理
   addNovel: (novel: NovelItem) => void;
+  updateNovel: (novelId: string, updates: Partial<NovelItem>) => void;
   removeNovel: (novelId: string) => void;
+
+  // Actions - AI创作流程
+  setCreationMode: (mode: "oneclick" | "guided" | null) => void;
+  setCreationStep: (step: number) => void;
+  updateCreationData: (data: Partial<CreationData>) => void;
+  resetCreationFlow: () => void;
+  setCreationLoading: (loading: boolean) => void;
+  setCreationError: (error: string | null) => void;
+  setCreationModeDialogOpen: (open: boolean) => void;
+  appendGeneratedChapterContent: (chunk: string) => void;
+  finalizeGeneratedChapter: () => void;
 }
 
 export const useCreateStore = create<CreateState>((set) => ({
@@ -106,6 +171,12 @@ export const useCreateStore = create<CreateState>((set) => ({
   aiGenerating: false,
   newNovelDialogOpen: false,
   publishDialogOpen: false,
+  creationMode: null,
+  creationStep: 0,
+  creationData: {},
+  creationLoading: false,
+  creationError: null,
+  creationModeDialogOpen: false,
 
   // 作品 Actions
   setNovels: (novels) => set({ novels }),
@@ -233,6 +304,12 @@ export const useCreateStore = create<CreateState>((set) => ({
       editorContent: novel.chapters[0]?.content ?? "",
       wordCount: novel.chapters[0]?.wordCount ?? 0,
     })),
+  updateNovel: (novelId, updates) =>
+    set((state) => ({
+      novels: state.novels.map((n) =>
+        n.id === novelId ? { ...n, ...updates } : n
+      ),
+    })),
   removeNovel: (novelId) =>
     set((state) => {
       const remaining = state.novels.filter((n) => n.id !== novelId);
@@ -248,5 +325,86 @@ export const useCreateStore = create<CreateState>((set) => ({
         };
       }
       return { novels: remaining };
+    }),
+
+  // AI创作流程 Actions
+  setCreationMode: (mode) => set({ creationMode: mode }),
+  setCreationStep: (step) => set({ creationStep: step }),
+  updateCreationData: (data) =>
+    set((state) => ({
+      creationData: { ...state.creationData, ...data },
+    })),
+  resetCreationFlow: () =>
+    set({
+      creationMode: null,
+      creationStep: 0,
+      creationData: {},
+      creationLoading: false,
+      creationError: null,
+    }),
+  setCreationLoading: (loading) => set({ creationLoading: loading }),
+  setCreationError: (error) => set({ creationError: error }),
+  setCreationModeDialogOpen: (open) => set({ creationModeDialogOpen: open }),
+  appendGeneratedChapterContent: (chunk) =>
+    set((state) => ({
+      creationData: {
+        ...state.creationData,
+        chapterStreamContent:
+          (state.creationData.chapterStreamContent || "") + chunk,
+      },
+    })),
+  finalizeGeneratedChapter: () =>
+    set((state) => {
+      const {
+        chapterStreamContent,
+        currentGeneratingChapter,
+        outline,
+        generatedChapters = [],
+      } = state.creationData;
+
+      if (
+        !chapterStreamContent ||
+        currentGeneratingChapter === undefined ||
+        !outline
+      ) {
+        return {
+          creationData: {
+            ...state.creationData,
+            chapterStreamContent: "",
+          },
+        };
+      }
+
+      const chapterInfo = outline[currentGeneratingChapter];
+      if (!chapterInfo) {
+        return {
+          creationData: {
+            ...state.creationData,
+            chapterStreamContent: "",
+          },
+        };
+      }
+
+      const wordCount = countWords(chapterStreamContent);
+      const contentSummary = extractChapterSummary(chapterStreamContent, 200);
+      const newChapter: CreationGeneratedChapter = {
+        title: chapterInfo.title,
+        content: chapterStreamContent,
+        summary: contentSummary || chapterInfo.summary,
+        order: chapterInfo.order,
+        wordCount,
+      };
+
+      const nextChapterIndex = currentGeneratingChapter + 1;
+      const hasMoreChapters = nextChapterIndex < outline.length;
+
+      return {
+        creationData: {
+          ...state.creationData,
+          generatedChapters: [...generatedChapters, newChapter],
+          currentGeneratingChapter: hasMoreChapters ? nextChapterIndex : undefined,
+          chapterStreamContent: "",
+        },
+      };
     }),
 }));

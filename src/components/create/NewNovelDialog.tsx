@@ -32,13 +32,41 @@ export function NewNovelDialog() {
   const open = useCreateStore((s) => s.newNovelDialogOpen);
   const setOpen = useCreateStore((s) => s.setNewNovelDialogOpen);
   const addNovel = useCreateStore((s) => s.addNovel);
+  const setCurrentNovel = useCreateStore((s) => s.setCurrentNovel);
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("玄幻");
   const [summary, setSummary] = useState("");
 
   const createMutation = trpc.novel.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const { novel, firstChapter } = data;
+
+      addNovel({
+        id: novel.id,
+        title: novel.title,
+        summary: novel.summary || undefined,
+        status: novel.status,
+        categoryId: novel.categoryId || undefined,
+        categoryName: novel.category?.name || category,
+        wordCount: 0,
+        chapters: [
+          {
+            id: firstChapter.id,
+            title: firstChapter.title,
+            content: firstChapter.content,
+            order: firstChapter.order,
+            status: "draft",
+            wordCount: 0,
+            createdAt: firstChapter.createdAt.toISOString(),
+            updatedAt: firstChapter.updatedAt.toISOString(),
+          },
+        ],
+        createdAt: novel.createdAt.toISOString(),
+        updatedAt: novel.updatedAt.toISOString(),
+      });
+
+      setCurrentNovel(novel.id);
       setOpen(false);
       resetForm();
     },
@@ -58,28 +86,11 @@ export function NewNovelDialog() {
   function handleConfirm() {
     if (!title.trim()) return;
 
-    const now = new Date().toISOString();
-    const novelId = `novel-${Date.now()}`;
-
-    addNovel({
-      id: novelId,
-      title: title.trim(),
-      summary: summary.trim() || undefined,
-      status: "DRAFT",
-      categoryName: category,
-      wordCount: 0,
-      chapters: [],
-      createdAt: now,
-      updatedAt: now,
-    });
-
     createMutation.mutate({
       title: title.trim(),
       summary: summary.trim() || undefined,
+      categoryName: category,
     });
-
-    setOpen(false);
-    resetForm();
   }
 
   return (
@@ -90,7 +101,6 @@ export function NewNovelDialog() {
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          {/* 作品名称 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">
               {t("novelName")}
@@ -105,7 +115,6 @@ export function NewNovelDialog() {
             />
           </div>
 
-          {/* 作品分类 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">
               {t("novelCategory")}
@@ -123,7 +132,6 @@ export function NewNovelDialog() {
             </select>
           </div>
 
-          {/* 作品简介 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">
               {t("novelSummary")}
@@ -138,7 +146,6 @@ export function NewNovelDialog() {
             />
           </div>
 
-          {/* 封面上传 */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">
               {t("coverUpload")}
