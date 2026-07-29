@@ -108,6 +108,120 @@ function extractJSON(text: string): unknown | null {
   return null;
 }
 
+/**
+ * Normalize AI response to handle common format issues:
+ * - Chinese field names → English field names
+ * - Wrapped objects ({"character": {...}}, {"主角": {...}}, [ {...} ])
+ * - String numbers → actual numbers
+ */
+function normalizeAIResponse(data: unknown, expectedShape: "metadata" | "worldview" | "character" | "outline"): unknown {
+  // If it's an array with one element, unwrap
+  if (Array.isArray(data) && data.length === 1) {
+    data = data[0];
+  }
+
+  if (typeof data !== "object" || data === null) return data;
+
+  const obj = data as Record<string, unknown>;
+
+  // Field name mappings: Chinese → English for each shape
+  const fieldMaps: Record<string, Record<string, string>> = {
+    metadata: {
+      标题: "title", 书名: "title", 名称: "title", title: "title",
+      分类: "category", 类型: "category", 题材: "category", category: "category", genre: "category",
+      标签: "tags", 关键词: "tags", tags: "tags",
+      简介: "summary", 介绍: "summary", 描述: "summary", 概要: "summary", summary: "summary", description: "summary",
+    },
+    worldview: {
+      世界观: "worldview", 设定: "worldview", 世界观设定: "worldview", worldview: "worldview", setting: "worldview",
+    },
+    character: {
+      姓名: "name", 名字: "name", 名称: "name", 主角名: "name", name: "name",
+      性别: "gender", gender: "gender", sex: "gender",
+      年龄: "age", 岁数: "age", age: "age",
+      性格: "personality", 性格特点: "personality", 性格特征: "personality", personality: "personality", traits: "personality",
+      背景: "background", 背景故事: "background", 身世: "background", 经历: "background", background: "background", story: "background",
+      目标: "goal", 动机: "goal", 追求: "goal", 目标追求: "goal", goal: "goal", motivation: "goal", objective: "goal",
+      外貌: "appearance", 形象: "appearance", 外貌描写: "appearance", 长相: "appearance", appearance: "appearance", looks: "appearance",
+    },
+    outline: {
+      章节: "chapters", 章节列表: "chapters", 大纲: "chapters", 目录: "chapters", chapters: "chapters", outline: "chapters",
+      序号: "order", 顺序: "order", 章节号: "order", 编号: "order", order: "order", number: "order", index: "order",
+      章节标题: "title", 标题: "title", 章名: "title", title: "title",
+      摘要: "summary", 概要: "summary", 内容: "summary", 梗概: "summary", summary: "summary", content: "summary",
+    },
+  };
+
+  // Try to unwrap common wrapper objects
+  const wrapperKeys: Record<string, string[]> = {
+    metadata: ["metadata", "novel", "小说", "元数据", "小说信息", "data", "result"],
+    worldview: ["worldview", "setting", "世界观", "设定", "世界观设定", "data", "result"],
+    character: ["character", "protagonist", "主角", "人物", "人物设定", "主角设定", "角色", "data", "result"],
+    outline: ["outline", "chapters", "大纲", "章节大纲", "目录", "章节列表", "data", "result"],
+  };
+
+  const wrappers = wrapperKeys[expectedShape];
+  for (const key of wrappers) {
+    if (obj[key] && typeof obj[key] === "object") {
+      // Check if this wrapped object looks like the right shape (has at least 2 expected fields)
+      const wrapped = obj[key] as Record<string, unknown>;
+      const fieldMap = fieldMaps[expectedShape];
+      const matchingFields = Object.keys(wrapped).filter(
+        k => fieldMap[k.toLowerCase()] || fieldMap[k] || Object.values(fieldMap).includes(k)
+      );
+      if (matchingFields.length >= 2) {
+        return normalizeAIResponse(wrapped, expectedShape);
+      }
+    }
+  }
+
+  // Map field names
+  const fieldMap = fieldMaps[expectedShape];
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const lowerKey = key.toLowerCase();
+    const mappedKey = fieldMap[key] || fieldMap[lowerKey] || key;
+
+    // Recursively normalize nested objects for outline
+    if (expectedShape === "outline" && mappedKey === "chapters" && Array.isArray(value)) {
+      normalized[mappedKey] = value.map((item: unknown) => normalizeAIResponse(item, "outline"));
+    } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      // For nested chapter objects, normalize them
+      if (expectedShape === "outline") {
+        normalized[mappedKey] = normalizeAIResponse(value, "outline");
+      } else {
+        normalized[mappedKey] = value;
+      }
+    } else {
+      normalized[mappedKey] = value;
+    }
+  }
+
+  // Convert string numbers for numeric fields
+  if (expectedShape === "character") {
+    if (typeof normalized.age === "string") {
+      const numMatch = (normalized.age as string).match(/\d+/);
+      if (numMatch) normalized.age = parseInt(numMatch[0], 10);
+    }
+  }
+  if (expectedShape === "outline") {
+    if (Array.isArray(normalized.chapters)) {
+      normalized.chapters = normalized.chapters.map((ch: Record<string, unknown>, idx: number) => {
+        if (typeof ch.order === "string") {
+          const numMatch = (ch.order as string).match(/\d+/);
+          if (numMatch) ch.order = parseInt(numMatch[0], 10);
+        }
+        if (ch.order === undefined || ch.order === null) {
+          ch.order = idx + 1;
+        }
+        return ch;
+      });
+    }
+  }
+
+  return normalized;
+}
+
 async function callAIWithJSON<T>(
   userId: string,
   action: string,
@@ -116,7 +230,8 @@ async function callAIWithJSON<T>(
   temperature: number,
   maxTokens: number,
   schema: z.ZodSchema<T>,
-  retries: number = 1
+  expectedShape: "metadata" | "worldview" | "character" | "outline",
+  retries: number = 2
 ): Promise<T> {
   const client = getAIClient();
 
@@ -142,7 +257,7 @@ async function callAIWithJSON<T>(
       }
 
       // Robustly extract JSON from the AI response
-      const parsed = extractJSON(result);
+      let parsed = extractJSON(result);
 
       if (parsed === null) {
         console.warn(`[AI] Failed to extract JSON on attempt ${attempt + 1}:`, result.slice(0, 300));
@@ -160,12 +275,16 @@ async function callAIWithJSON<T>(
         });
       }
 
+      // Normalize the response (handle Chinese field names, wrapped objects, string numbers)
+      parsed = normalizeAIResponse(parsed, expectedShape);
+
       let validated: T;
       try {
         validated = schema.parse(parsed);
       } catch (validationError) {
         console.warn(`[AI] Schema validation failed on attempt ${attempt + 1}:`, validationError instanceof Error ? validationError.message : validationError);
-        console.warn(`[AI] Parsed data was:`, JSON.stringify(parsed).slice(0, 300));
+        console.warn(`[AI] Raw response:`, result.slice(0, 500));
+        console.warn(`[AI] Parsed data:`, JSON.stringify(parsed).slice(0, 500));
         if (attempt < retries) continue;
         logAIAudit({
           userId,
@@ -274,7 +393,8 @@ export const creationRouter = router({
         prompt,
         0.3,
         1024,
-        metadataSchema
+        metadataSchema,
+        "metadata"
       );
     }),
 
@@ -320,7 +440,8 @@ export const creationRouter = router({
         prompt,
         0.7,
         2048,
-        worldviewSchema
+        worldviewSchema,
+        "worldview"
       );
     }),
 
@@ -368,7 +489,8 @@ export const creationRouter = router({
         prompt,
         0.7,
         1024,
-        characterSchema
+        characterSchema,
+        "character"
       );
     }),
 
@@ -384,13 +506,13 @@ export const creationRouter = router({
         character: z.object({
           name: z.string(),
           gender: z.string(),
-          age: z.number(),
+          age: z.coerce.number(),
           personality: z.string(),
           background: z.string(),
           goal: z.string(),
           appearance: z.string(),
         }),
-        chapterCount: z.number().min(3).max(20).default(10),
+        chapterCount: z.coerce.number().min(3).max(20).default(10),
         locale: z.string().optional(),
       })
     )
@@ -438,7 +560,8 @@ export const creationRouter = router({
         prompt,
         0.5,
         3000,
-        outlineSchema
+        outlineSchema,
+        "outline"
       );
     }),
 
@@ -587,7 +710,8 @@ export const creationRouter = router({
           metaPrompt,
           0.3,
           1024,
-          metadataSchema
+          metadataSchema,
+          "metadata"
         );
 
         await quotaCheck();
@@ -604,7 +728,7 @@ export const creationRouter = router({
         );
         const worldviewResult = await callAIWithJSON<
           z.infer<typeof worldviewSchema>
-        >(userId, "quickCreate_worldview", wvSys, wvPrompt, 0.7, 2048, worldviewSchema);
+        >(userId, "quickCreate_worldview", wvSys, wvPrompt, 0.7, 2048, worldviewSchema, "worldview");
 
         await quotaCheck();
         const { systemPrompt: charSys, prompt: charPrompt } = buildCharacterPrompt(
@@ -620,7 +744,8 @@ export const creationRouter = router({
           charPrompt,
           0.7,
           1024,
-          characterSchema
+          characterSchema,
+          "character"
         );
 
         await quotaCheck();
@@ -649,7 +774,8 @@ export const creationRouter = router({
           outlinePrompt,
           0.5,
           3000,
-          outlineSchema
+          outlineSchema,
+          "outline"
         );
 
         return {

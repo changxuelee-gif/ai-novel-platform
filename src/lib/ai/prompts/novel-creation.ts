@@ -1,4 +1,4 @@
-const SUFFIX = "请严格按照以上要求输出，不要输出任何多余的解释、说明或markdown代码块标记。";
+const SUFFIX = "重要：请只输出纯JSON对象，不要输出任何解释、说明、问候语或markdown代码块标记（如```json）。字段名必须使用英文字段名。";
 
 function getLocaleInstruction(locale?: string): string {
   switch (locale) {
