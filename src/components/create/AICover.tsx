@@ -87,7 +87,7 @@ export function AICover({
   const sizeCls = SIZE_CLASSES[size];
 
   const categoryLabel = category
-    ? t(`categories.${CATEGORY_I18N_KEYS[category as CategoryKey] || category}` as any)
+    ? t(`categories.${CATEGORY_I18N_KEYS[category as CategoryKey] || category}` as never)
     : undefined;
 
   const showImage = coverUrl && !imageFailed;
