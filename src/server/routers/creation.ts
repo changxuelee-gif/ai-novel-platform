@@ -638,24 +638,31 @@ export const creationRouter = router({
         const categorySlug = input.categoryName
           .toLowerCase()
           .replace(/\s+/g, "-");
-        const category = await prisma.category.upsert({
-          where: { slug: categorySlug },
-          update: {},
-          create: {
-            name: input.categoryName,
-            slug: categorySlug,
-          },
+        const existingCategory = await prisma.category.findFirst({
+          where: { OR: [{ slug: categorySlug }, { name: input.categoryName }] },
         });
-        categoryId = category.id;
+        if (existingCategory) {
+          categoryId = existingCategory.id;
+        } else {
+          const category = await prisma.category.create({
+            data: {
+              name: input.categoryName,
+              slug: categorySlug,
+            },
+          });
+          categoryId = category.id;
+        }
       }
 
       const tagRecords = await Promise.all(
         input.tags.map(async (tagName) => {
           const tagSlug = tagName.toLowerCase().replace(/\s+/g, "-");
-          return prisma.tag.upsert({
-            where: { slug: tagSlug },
-            update: {},
-            create: {
+          const existingTag = await prisma.tag.findFirst({
+            where: { OR: [{ slug: tagSlug }, { name: tagName }] },
+          });
+          if (existingTag) return existingTag;
+          return prisma.tag.create({
+            data: {
               name: tagName,
               slug: tagSlug,
             },
