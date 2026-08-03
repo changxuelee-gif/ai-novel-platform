@@ -17,7 +17,16 @@ export interface AICompleteParams {
   useFastModel?: boolean;
 }
 
+export interface ImageGenerationParams {
+  prompt: string;
+  model?: string;
+  size?: string;
+  n?: number;
+  timeoutMs?: number;
+}
+
 export interface AIClient {
   complete(params: AICompleteParams): Promise<string>;
   completeStream(params: AICompleteParams): AsyncIterable<string>;
+  generateImage(params: ImageGenerationParams): Promise<string>;
 }

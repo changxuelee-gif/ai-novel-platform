@@ -212,6 +212,16 @@ function normalizeAIResponse(data: unknown, expectedShape: "metadata" | "worldvi
       const numMatch = (normalized.age as string).match(/\d+/);
       if (numMatch) normalized.age = parseInt(numMatch[0], 10);
     }
+    // Convert array fields to comma/顿号 separated strings (AI often returns arrays for "关键词" fields)
+    const stringFields = ["personality", "tags"];
+    for (const field of stringFields) {
+      if (Array.isArray(normalized[field])) {
+        const arr = normalized[field] as unknown[];
+        if (arr.every(item => typeof item === "string")) {
+          normalized[field] = arr.join("、");
+        }
+      }
+    }
   }
   if (expectedShape === "outline") {
     if (Array.isArray(normalized.chapters)) {
@@ -240,18 +250,24 @@ async function callAIWithJSON<T>(
   maxTokens: number,
   schema: z.ZodSchema<T>,
   expectedShape: "metadata" | "worldview" | "character" | "outline",
-  retries: number = 1
+  retries: number = 2
 ): Promise<T> {
   // Use fast model for long-running tasks (worldview, character, outline) to stay within Netlify timeout limits;
   // metadata generation is short/structured, use quality model for better accuracy
   const useFastModel = expectedShape !== "metadata";
+  const SUFFIX_RULES = "你必须只返回纯JSON对象，不要包含任何解释、说明、markdown代码块标记或其他文字。所有字段名必须使用英文。所有字符串字段值必须是字符串类型（用双引号包裹），不要使用数组格式。";
+
+  let lastValidationError: unknown = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const client = getAIClient();
+      const retryHint = attempt > 0 && lastValidationError
+        ? `\n\n【重要纠错提示】你上次返回的数据格式有误：${lastValidationError instanceof Error ? lastValidationError.message : String(lastValidationError).slice(0, 200)}。请修正后重新返回正确的JSON。特别注意：personality、tags等字段是字符串类型，用顿号分隔关键词，不是数组。`
+        : "";
       const result = await client.complete({
-        systemPrompt: systemPrompt + "\n\n你必须只返回纯JSON对象，不要包含任何解释、说明、markdown代码块标记或其他文字。所有字段名必须使用英文。",
-        prompt,
+        systemPrompt: systemPrompt + "\n\n" + SUFFIX_RULES,
+        prompt: prompt + retryHint,
         temperature,
         maxTokens,
         useFastModel,
@@ -299,6 +315,7 @@ async function callAIWithJSON<T>(
       try {
         validated = schema.parse(parsed);
       } catch (validationError) {
+        lastValidationError = validationError;
         console.warn(`[AI] Schema validation failed on attempt ${attempt + 1}:`, validationError instanceof Error ? validationError.message : validationError);
         console.warn(`[AI] Raw response:`, result.slice(0, 500));
         console.warn(`[AI] Parsed data:`, JSON.stringify(parsed).slice(0, 500));
@@ -459,7 +476,7 @@ export const creationRouter = router({
         systemPrompt,
         prompt,
         0.7,
-        2048,
+        4096,
         worldviewSchema,
         "worldview"
       );
@@ -508,7 +525,7 @@ export const creationRouter = router({
         systemPrompt,
         prompt,
         0.7,
-        2048,
+        4096,
         characterSchema,
         "character"
       );
@@ -579,7 +596,7 @@ export const creationRouter = router({
         systemPrompt,
         prompt,
         0.5,
-        3000,
+        4096,
         outlineSchema,
         "outline"
       );
@@ -681,11 +698,15 @@ export const creationRouter = router({
         )
       );
 
-      const firstChapter = chapters.sort((a, b) => a.order - b.order)[0];
+      // Sort chapters by order and return all chapter IDs
+      const sortedChapters = chapters.sort((a, b) => a.order - b.order);
 
       return {
         novelId: novel.id,
-        firstChapterId: firstChapter.id,
+        chapters: sortedChapters.map((ch) => ({
+          chapterId: ch.id,
+          order: ch.order,
+        })),
       };
     }),
 
@@ -748,7 +769,7 @@ export const creationRouter = router({
         );
         const worldviewResult = await callAIWithJSON<
           z.infer<typeof worldviewSchema>
-        >(userId, "quickCreate_worldview", wvSys, wvPrompt, 0.7, 2048, worldviewSchema, "worldview");
+        >(userId, "quickCreate_worldview", wvSys, wvPrompt, 0.7, 4096, worldviewSchema, "worldview");
 
         await quotaCheck();
         const { systemPrompt: charSys, prompt: charPrompt } = buildCharacterPrompt(
@@ -763,7 +784,7 @@ export const creationRouter = router({
           charSys,
           charPrompt,
           0.7,
-          2048,
+          4096,
           characterSchema,
           "character"
         );
@@ -793,7 +814,7 @@ export const creationRouter = router({
           outlineSys,
           outlinePrompt,
           0.5,
-          3000,
+          4096,
           outlineSchema,
           "outline"
         );
@@ -810,6 +831,68 @@ export const creationRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: e instanceof Error ? e.message : "生成过程中发生未知错误，请重试",
+        });
+      }
+    }),
+
+  generateCover: protectedProcedure
+    .input(
+      z.object({
+        title: z.string().min(1).max(100),
+        summary: z.string().min(10).max(2000),
+        category: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      })
+    )
+    .output(
+      z.object({
+        coverUrl: z.string().url(),
+        prompt: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Check quota
+      const quota = await checkQuota(userId);
+      if (!quota.allowed) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "今日AI使用额度已用完，请明天再试或升级套餐",
+        });
+      }
+
+      try {
+        // Build English image generation prompt using AI
+        const { buildCoverImagePrompt } = await import("@/lib/ai/cover-prompt");
+        const imagePrompt = await buildCoverImagePrompt({
+          title: input.title,
+          summary: input.summary,
+          category: input.category,
+          tags: input.tags,
+        });
+
+        // Generate image using DashScope text-to-image API
+        const client = getAIClient();
+        const coverUrl = await client.generateImage({
+          prompt: imagePrompt,
+          size: "768*1024", // Portrait for book covers
+          n: 1,
+        });
+
+        // Record usage (inputTokens=0, outputTokens=1 for image generation)
+        await recordUsage(userId, "generate_cover", 0, 1);
+
+        return {
+          coverUrl,
+          prompt: imagePrompt,
+        };
+      } catch (e) {
+        if (e instanceof TRPCError) throw e;
+        console.error("[generateCover] Error:", e);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: e instanceof Error ? e.message : "封面生成失败，请重试",
         });
       }
     }),

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
 type CategoryKey =
@@ -44,6 +46,17 @@ const SIZE_CLASSES = {
   },
 };
 
+const CATEGORY_I18N_KEYS: Record<CategoryKey, string> = {
+  玄幻: "fantasy",
+  都市: "urban",
+  仙侠: "xianxia",
+  科幻: "scifi",
+  竞技: "sports",
+  历史: "history",
+  悬疑: "mystery",
+  言情: "romance",
+};
+
 const DEFAULT_GRADIENT = "from-violet-500 to-purple-700";
 
 interface AICoverProps {
@@ -51,6 +64,7 @@ interface AICoverProps {
   category?: string;
   className?: string;
   size?: "sm" | "md" | "lg";
+  coverUrl?: string; // AI-generated cover image URL
 }
 
 function getGradient(category?: string): string {
@@ -65,9 +79,18 @@ export function AICover({
   category,
   className,
   size = "md",
+  coverUrl,
 }: AICoverProps) {
+  const t = useTranslations("create");
+  const [imageFailed, setImageFailed] = useState(false);
   const gradient = getGradient(category);
   const sizeCls = SIZE_CLASSES[size];
+
+  const categoryLabel = category
+    ? t(`categories.${CATEGORY_I18N_KEYS[category as CategoryKey] || category}` as any)
+    : undefined;
+
+  const showImage = coverUrl && !imageFailed;
 
   return (
     <div
@@ -78,42 +101,60 @@ export function AICover({
         className
       )}
     >
-      {/* Decorative geometric elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div
-          className={cn(
-            "absolute top-2 right-2 w-8 h-8 border-2 border-white/20 rounded-full",
-            sizeCls.lines
-          )}
+      {/* Real cover image */}
+      {showImage && (
+        <img
+          src={coverUrl}
+          alt={title}
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={() => setImageFailed(true)}
+          loading="lazy"
         />
-        <div
-          className={cn(
-            "absolute -bottom-4 -left-4 w-16 h-16 border-2 border-white/10 rotate-45",
-            sizeCls.lines
-          )}
-        />
-        <div
-          className={cn(
-            "absolute top-1/3 left-2 w-12 h-0.5 bg-white/10",
-            sizeCls.lines
-          )}
-        />
-        <div
-          className={cn(
-            "absolute top-1/2 right-4 w-8 h-0.5 bg-white/10",
-            sizeCls.lines
-          )}
-        />
-        <div
-          className={cn(
-            "absolute bottom-1/4 left-4 w-6 h-0.5 bg-white/10 rotate-45",
-            sizeCls.lines
-          )}
-        />
-      </div>
+      )}
+
+      {/* Gradient overlay for better text readability when image is present */}
+      {showImage && (
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+      )}
+
+      {/* Decorative geometric elements (only when no image) */}
+      {!showImage && (
+        <div className="absolute inset-0 overflow-hidden">
+          <div
+            className={cn(
+              "absolute top-2 right-2 w-8 h-8 border-2 border-white/20 rounded-full",
+              sizeCls.lines
+            )}
+          />
+          <div
+            className={cn(
+              "absolute -bottom-4 -left-4 w-16 h-16 border-2 border-white/10 rotate-45",
+              sizeCls.lines
+            )}
+          />
+          <div
+            className={cn(
+              "absolute top-1/3 left-2 w-12 h-0.5 bg-white/10",
+              sizeCls.lines
+            )}
+          />
+          <div
+            className={cn(
+              "absolute top-1/2 right-4 w-8 h-0.5 bg-white/10",
+              sizeCls.lines
+            )}
+          />
+          <div
+            className={cn(
+              "absolute bottom-1/4 left-4 w-6 h-0.5 bg-white/10 rotate-45",
+              sizeCls.lines
+            )}
+          />
+        </div>
+      )}
 
       {/* Category tag */}
-      {category && (
+      {categoryLabel && (
         <div className="absolute top-2 left-2">
           <span
             className={cn(
@@ -121,7 +162,7 @@ export function AICover({
               sizeCls.tag
             )}
           >
-            {category}
+            {categoryLabel}
           </span>
         </div>
       )}

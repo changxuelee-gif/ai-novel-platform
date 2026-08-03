@@ -97,6 +97,7 @@ model User {
   earnings         Earning[]
   withdrawals      Withdrawal[]
   aiUsageLogs      AIUsageLog[]
+  checkIns         CheckIn[]
 }
 
 model Account {
@@ -411,6 +412,21 @@ model UserTask {
 
   @@unique([userId, taskId])
   @@index([userId])
+}
+
+// ========== Check-in ==========
+
+model CheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  checkDate DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, checkDate])
+  @@index([userId])
+  @@index([checkDate])
 }
 
 // ========== Earnings ==========

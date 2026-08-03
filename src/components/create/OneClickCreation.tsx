@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   Sparkles,
   Loader2,
@@ -31,14 +33,6 @@ const isUnauthorizedError = (message: string | null | undefined) => {
   return message.includes("UNAUTHORIZED") || message.includes("未登录") || message.includes("401");
 };
 
-const getErrorMessage = (message: string | null | undefined) => {
-  if (!message) return "生成失败，请重试";
-  if (isUnauthorizedError(message)) {
-    return "请先登录后使用AI创作";
-  }
-  return message;
-};
-
 const QUICK_IDEAS = [
   "一个普通少年意外获得上古传承，踏上修仙之路",
   "未来世界，AI拥有情感，人类与AI的爱情故事",
@@ -57,6 +51,7 @@ interface OneClickCreationProps {
 }
 
 export function OneClickCreation({ onClose }: OneClickCreationProps) {
+  const t = useTranslations("create");
   const {
     creationStep,
     creationData,
@@ -76,10 +71,40 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
     new Set()
   );
   const [isCreatingNovel, setIsCreatingNovel] = useState(false);
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [coverError, setCoverError] = useState(false);
 
   const quickCreate = useQuickCreate();
   const chapterStream = useChapterStream({ autoContinue: true });
   const createNovelMutation = trpc.creation.createNovelWithAI.useMutation();
+  const generateCoverMutation = trpc.creation.generateCover.useMutation();
+
+  // Trigger cover generation when entering the completion page (step 3)
+  useEffect(() => {
+    if (creationStep === 3 && creationData.metadata && !creationData.coverUrl && !coverLoading && !coverError) {
+      setCoverLoading(true);
+      generateCoverMutation.mutate(
+        {
+          title: creationData.metadata.title,
+          summary: creationData.metadata.summary,
+          category: creationData.metadata.category,
+          tags: creationData.metadata.tags,
+        },
+        {
+          onSuccess: (result) => {
+            updateCreationData({ coverUrl: result.coverUrl });
+            setCoverLoading(false);
+          },
+          onError: (error) => {
+            console.error("Cover generation failed:", error);
+            setCoverLoading(false);
+            setCoverError(true);
+            toast.error(t("oneClick.coverFailed"));
+          },
+        }
+      );
+    }
+  }, [creationStep]);
 
   useEffect(() => {
     if (chapterStream.content) {
@@ -216,6 +241,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
         summary: creationData.metadata.summary,
         categoryName: creationData.metadata.category,
         tags: creationData.metadata.tags,
+        cover: creationData.coverUrl, // Pass AI-generated cover URL if available
         chapters: creationData.generatedChapters.map((ch) => ({
           title: ch.title,
           content: ch.content,
@@ -225,8 +251,14 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
 
       const now = new Date().toISOString();
       const firstChapterContent = creationData.generatedChapters[0]?.content || "";
-      const chapters = creationData.generatedChapters.map((ch, idx) => ({
-        id: idx === 0 ? result.firstChapterId : generateChapterId(),
+      
+      // Create a map of order -> chapterId from the backend response
+      const chapterIdMap = new Map(
+        result.chapters.map((ch) => [ch.order, ch.chapterId])
+      );
+
+      const chapters = creationData.generatedChapters.map((ch) => ({
+        id: chapterIdMap.get(ch.order) || generateChapterId(),
         title: ch.title,
         content: ch.content,
         order: ch.order,
@@ -252,12 +284,19 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
       };
 
       addNovel(novel);
-      setCurrentChapter(result.firstChapterId);
+      // Set current chapter to the first chapter (order 1)
+      const firstChapterId = chapterIdMap.get(1);
+      if (firstChapterId) {
+        setCurrentChapter(firstChapterId);
+      }
       setEditorContent(firstChapterContent);
       setCreationMode(null);
       resetCreationFlow();
     } catch (error) {
       console.error("Failed to create novel:", error);
+      toast.error(
+        error instanceof Error ? error.message : t("oneClick.saveFailed")
+      );
     } finally {
       setIsCreatingNovel(false);
     }
@@ -366,7 +405,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
         <Card className="w-full max-w-2xl">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">
-              一句话写小说
+              {t("oneClick.title")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6 pt-4">
@@ -374,7 +413,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
               <Textarea
                 value={concept}
                 onChange={(e) => setConcept(e.target.value)}
-                placeholder="描述你想写的小说，比如题材、主角、故事走向..."
+                placeholder={t("oneClick.placeholder")}
                 className="min-h-[120px] resize-none text-base p-4"
                 maxLength={500}
               />
@@ -385,7 +424,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
 
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                试试这些灵感：
+                {t("oneClick.tryInspiration")}
               </p>
               <div className="flex flex-wrap gap-2">
                 {QUICK_IDEAS.map((idea, idx) => (
@@ -407,7 +446,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
               size="lg"
             >
               <Sparkles className="w-5 h-5 mr-2" />
-              一键生成
+              {t("oneClick.generate")}
             </Button>
 
             {quickCreate.error && (
@@ -428,7 +467,11 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
     const hasChapterStreamError = !!chapterStream.error;
     const hasAnyError = hasQuickCreateError || hasChapterStreamError;
     const currentError = quickCreate.error || chapterStream.error;
-    const errorMessage = getErrorMessage(currentError);
+    const errorMessage = !currentError
+      ? t("oneClick.generationFailed")
+      : isUnauthorizedError(currentError)
+      ? t("oneClick.loginToUse")
+      : currentError;
     const isAuthError = isUnauthorizedError(currentError);
 
     return (
@@ -457,7 +500,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
                         className="bg-white border-red-300 text-red-700 hover:bg-red-50 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300"
                       >
                         <RefreshCw className="w-4 h-4 mr-1" />
-                        重试
+                        {t("oneClick.retry")}
                       </Button>
                     )}
                     <Button
@@ -467,7 +510,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
                       className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
                     >
                       <Pencil className="w-4 h-4 mr-1" />
-                      返回修改
+                      {t("oneClick.goBack")}
                     </Button>
                   </div>
                 </div>
@@ -478,7 +521,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-muted-foreground">
-                生成进度
+                {t("oneClick.generationProgress")}
               </span>
               <span className="text-sm font-medium text-violet-600">
                 {progress}%
@@ -498,7 +541,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4">
-                生成步骤
+                {t("oneClick.generationSteps")}
               </h3>
               <div className="space-y-4">
                 {steps.map((step, idx) => (
@@ -597,7 +640,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
                     className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
                   >
                     <X className="w-4 h-4 mr-2" />
-                    取消生成
+                    {t("oneClick.cancelGeneration")}
                   </Button>
                 )}
               </div>
@@ -605,7 +648,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
 
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4">
-                实时预览
+                {t("oneClick.livePreview")}
               </h3>
               {creationData.metadata && !hasAnyError ? (
                 <div className="space-y-4">
@@ -642,13 +685,13 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
                     <div className="flex items-center gap-2 mb-2">
                       <BookOpen className="w-4 h-4 text-violet-500" />
                       <span className="text-sm font-medium">
-                        正在撰写第{(creationData.currentGeneratingChapter ?? 0) + 1}章
+                        {t("oneClick.writingChapter", { chapter: (creationData.currentGeneratingChapter ?? 0) + 1 })}
                       </span>
                     </div>
                     <ScrollArea className="h-64 w-full rounded-md border p-4 bg-muted/30">
                       <div className="text-sm leading-relaxed whitespace-pre-wrap">
                         {creationData.chapterStreamContent ||
-                          "等待内容生成..."}
+                          t("oneClick.waitingContent")}
                       </div>
                     </ScrollArea>
                   </div>
@@ -656,12 +699,12 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
               ) : hasAnyError ? (
                 <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                   <AlertCircle className="w-8 h-8 mb-4 text-red-500" />
-                  <p className="text-red-600 dark:text-red-400">生成遇到问题</p>
+                  <p className="text-red-600 dark:text-red-400">{t("oneClick.generationError")}</p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                   <Loader2 className="w-8 h-8 animate-spin mb-4 text-violet-500" />
-                  <p>正在准备...</p>
+                  <p>{t("oneClick.preparing")}</p>
                 </div>
               )}
             </Card>
@@ -683,19 +726,24 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <h2 className="text-2xl font-bold">
-              生成完成！
+              {t("oneClick.completed")}
             </h2>
           </div>
 
           <Card className="mb-6">
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row gap-6">
-                <AICover
-                  title={metadata.title}
-                  category={metadata.category}
-                  size="lg"
-                  className="shrink-0 mx-auto sm:mx-0"
-                />
+                {coverLoading ? (
+                  <div className="w-40 h-56 rounded-lg bg-muted animate-pulse shrink-0 mx-auto sm:mx-0" />
+                ) : (
+                  <AICover
+                    title={metadata.title}
+                    category={metadata.category}
+                    coverUrl={creationData.coverUrl}
+                    size="lg"
+                    className="shrink-0 mx-auto sm:mx-0"
+                  />
+                )}
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold mb-2">{metadata.title}</h3>
                   <div className="flex flex-wrap gap-2 mb-3">
@@ -718,7 +766,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-violet-500" />
-                章节预览
+                {t("oneClick.chapterPreview")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -738,7 +786,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
                       <div className="text-left">
                         <div className="font-medium">{chapter.title}</div>
                         <div className="text-xs text-muted-foreground">
-                          {chapter.wordCount} 字
+                          {chapter.wordCount} {t("oneClick.words")}
                         </div>
                       </div>
                     </div>
@@ -769,7 +817,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
               disabled={isCreatingNovel}
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              重新生成
+              {t("oneClick.regenerate")}
             </Button>
             <Button
               onClick={handleStartWriting}
@@ -779,9 +827,9 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
               {isCreatingNovel ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Pencil className="w-4 h-4 mr-2" />
+                <BookOpen className="w-4 h-4 mr-2" />
               )}
-              开始创作
+              {t("oneClick.enterEditor")}
             </Button>
           </div>
         </div>

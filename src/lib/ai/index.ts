@@ -1,4 +1,4 @@
-export type { AIGenerationOptions, AICompleteParams, AIClient } from "./types";
+export type { AIGenerationOptions, AICompleteParams, AIClient, ImageGenerationParams } from "./types";
 export { getAIClient } from "./client";
 export {
   buildContinuePrompt,
@@ -18,6 +18,7 @@ export {
   buildChapterSummaryPrompt,
   buildQuickChapterPrompt,
 } from "./prompts/novel-creation";
+export { buildCoverImagePrompt } from "./cover-prompt";
 export type {
   NovelMetadata,
   NovelCharacter,

@@ -1,12 +1,20 @@
-import type { AIClient, AICompleteParams } from "./types";
+import type { AIClient, AICompleteParams, ImageGenerationParams } from "./types";
 
 const DASHSCOPE_API_URL =
   "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+const DASHSCOPE_IMAGE_API_URL =
+  "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis";
+const DASHSCOPE_TASK_API_URL =
+  "https://dashscope.aliyuncs.com/api/v1/tasks";
 // Quality model for short/fast tasks (metadata, etc.) - stays within 10s Netlify limit
 const QUALITY_MODEL = "qwen-plus";
 // Fast model for long-running tasks (configured via AI_MODEL env var, falls back to qwen-turbo)
 const FAST_MODEL = process.env.AI_MODEL || "qwen-turbo";
+// Image generation model (wanx2.1-t2i-turbo for fast generation)
+const IMAGE_MODEL = "wanx2.1-t2i-turbo";
 const DEFAULT_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 25000; // 25s default (Netlify Pro=26s); free tier 10s limit handled by fast model selection
+const IMAGE_POLL_INTERVAL_MS = 2000; // 2s poll interval
+const IMAGE_MAX_POLLS = 30; // 60s total timeout
 
 export class QwenClient implements AIClient {
   private apiKey: string;
@@ -188,5 +196,93 @@ export class QwenClient implements AIClient {
       clearTimeout(timeoutId);
       reader.releaseLock();
     }
+  }
+
+  async generateImage(params: ImageGenerationParams): Promise<string> {
+    const model = params.model || IMAGE_MODEL;
+    const size = params.size || "768*1024"; // Portrait for book covers
+    const n = params.n || 1;
+
+    // Step 1: Submit image generation task
+    const submitBody = {
+      model,
+      input: {
+        prompt: params.prompt,
+      },
+      parameters: {
+        size,
+        n,
+      },
+    };
+
+    const submitResponse = await fetch(DASHSCOPE_IMAGE_API_URL, {
+      method: "POST",
+      headers: {
+        ...this.buildHeaders(),
+        "X-DashScope-Async": "enable",
+      },
+      body: JSON.stringify(submitBody),
+    });
+
+    if (!submitResponse.ok) {
+      const errorText = await submitResponse.text();
+      console.error(`[QwenClient] Image generation submit failed ${submitResponse.status}: ${errorText.slice(0, 500)}`);
+      throw new Error(
+        `Image generation failed (${submitResponse.status}): ${errorText.slice(0, 300)}`
+      );
+    }
+
+    const submitData = await submitResponse.json();
+    const taskId = submitData?.output?.task_id;
+    if (!taskId) {
+      console.error("[QwenClient] No task_id returned:", JSON.stringify(submitData).slice(0, 500));
+      throw new Error("Image generation: no task_id returned");
+    }
+
+    // Step 2: Poll for task completion
+    const pollUrl = `${DASHSCOPE_TASK_API_URL}/${taskId}`;
+    const timeoutMs = params.timeoutMs || IMAGE_MAX_POLLS * IMAGE_POLL_INTERVAL_MS;
+    const startTime = Date.now();
+
+    for (let i = 0; i < IMAGE_MAX_POLLS; i++) {
+      if (Date.now() - startTime > timeoutMs) {
+        throw new Error(`Image generation timed out after ${timeoutMs / 1000}s`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, IMAGE_POLL_INTERVAL_MS));
+
+      const pollResponse = await fetch(pollUrl, {
+        method: "GET",
+        headers: this.buildHeaders(),
+      });
+
+      if (!pollResponse.ok) {
+        const errorText = await pollResponse.text();
+        console.error(`[QwenClient] Image poll failed ${pollResponse.status}: ${errorText.slice(0, 500)}`);
+        throw new Error(
+          `Image poll failed (${pollResponse.status}): ${errorText.slice(0, 300)}`
+        );
+      }
+
+      const pollData = await pollResponse.json();
+      const status = pollData?.output?.task_status;
+
+      if (status === "SUCCEEDED") {
+        const results = pollData?.output?.results;
+        if (results && results.length > 0) {
+          const imageUrl = results[0]?.url;
+          if (imageUrl) {
+            return imageUrl;
+          }
+        }
+        throw new Error("Image generation succeeded but no URL returned");
+      } else if (status === "FAILED") {
+        const message = pollData?.output?.message || "Unknown error";
+        throw new Error(`Image generation failed: ${message}`);
+      }
+      // status === "PENDING" or "RUNNING": continue polling
+    }
+
+    throw new Error(`Image generation timed out after ${IMAGE_MAX_POLLS} polls`);
   }
 }

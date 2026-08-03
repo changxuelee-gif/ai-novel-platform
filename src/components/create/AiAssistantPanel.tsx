@@ -164,9 +164,9 @@ export function AiAssistantPanel() {
     if (error) {
       let errorMsg: string;
       if (error.includes("额度")) {
-        errorMsg = "今日AI使用额度已用完，请明天再试或升级套餐";
+        errorMsg = t("aiQuotaExceeded");
       } else if (error.includes("规范")) {
-        errorMsg = "生成内容不符合规范";
+        errorMsg = t("aiContentInvalid");
       } else {
         errorMsg = error;
       }

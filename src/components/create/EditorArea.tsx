@@ -8,11 +8,13 @@ import CharacterCount from "@tiptap/extension-character-count"
 import Image from "@tiptap/extension-image"
 import Link from "@tiptap/extension-link"
 import { FileText } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { useCreateStore } from "@/stores/useCreateStore"
 import { RichEditor } from "./RichEditor"
 import { EditorToolbar } from "./EditorToolbar"
 
 export function EditorArea() {
+  const t = useTranslations("create")
   const {
     currentChapter,
     currentChapterId,
@@ -36,7 +38,7 @@ export function EditorArea() {
         codeBlock: false,
       }),
       Placeholder.configure({
-        placeholder: "开始创作你的故事...",
+        placeholder: t("startWriting"),
       }),
       CharacterCount,
       Image,
@@ -117,7 +119,7 @@ export function EditorArea() {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
         <FileText className="size-12 opacity-30" />
-        <p className="text-sm">请选择一个章节开始创作</p>
+        <p className="text-sm">{t("selectChapter")}</p>
       </div>
     )
   }

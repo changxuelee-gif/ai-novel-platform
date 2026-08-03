@@ -12,11 +12,20 @@ import {
 } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import "dotenv/config";
+import { config } from "dotenv";
+import { join } from "path";
+
+// Load environment variables in Next.js priority order:
+// .env.local > .env
+config({ path: join(process.cwd(), ".env") });
+config({ path: join(process.cwd(), ".env.local"), override: true });
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : undefined,
 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });

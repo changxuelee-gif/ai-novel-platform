@@ -7,6 +7,7 @@ import { TrpcProvider } from "@/components/providers/TrpcProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 
 type Props = {
   children: React.ReactNode;
@@ -59,6 +60,7 @@ export default async function LocaleLayout({ children, params }: Props) {
             <TrpcProvider>
               <ThemeProvider>
                 <TooltipProvider>{children}</TooltipProvider>
+                <Toaster />
               </ThemeProvider>
             </TrpcProvider>
           </AuthProvider>

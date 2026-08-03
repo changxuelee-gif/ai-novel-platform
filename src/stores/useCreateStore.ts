@@ -76,6 +76,7 @@ export interface CreationData {
   generatedChapters?: CreationGeneratedChapter[];
   currentGeneratingChapter?: number;
   chapterStreamContent?: string;
+  coverUrl?: string; // AI-generated cover image URL
 }
 
 interface CreateState {

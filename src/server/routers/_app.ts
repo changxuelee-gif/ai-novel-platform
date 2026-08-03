@@ -8,6 +8,7 @@ import { activityRouter } from "./activity";
 import { interactionRouter } from "./interaction";
 import { aiRouter } from "./ai";
 import { creationRouter } from "./creation";
+import { checkinRouter } from "./checkin";
 
 export const appRouter = router({
   novel: novelRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   interaction: interactionRouter,
   ai: aiRouter,
   creation: creationRouter,
+  checkin: checkinRouter,
 });
 
 export type AppRouter = typeof appRouter;

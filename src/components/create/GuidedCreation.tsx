@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   Sparkles,
   Loader2,
@@ -13,7 +15,6 @@ import {
   User,
   Globe,
   ListOrdered,
-  Pencil,
   ArrowUp,
   ArrowDown,
   X,
@@ -46,23 +47,23 @@ const isUnauthorizedError = (message: string | null | undefined) => {
   return message.includes("UNAUTHORIZED") || message.includes("未登录") || message.includes("401");
 };
 
-const getErrorMessage = (message: string | null | undefined) => {
-  if (!message) return "生成失败，请重试";
+const getErrorMessage = (message: string | null | undefined, generationFailed: string, loginRequired: string) => {
+  if (!message) return generationFailed;
   if (isUnauthorizedError(message)) {
-    return "请先登录后使用AI创作";
+    return loginRequired;
   }
   return message;
 };
 
 const CATEGORIES = [
-  { name: "玄幻", emoji: "⚔️", tags: ["重生", "系统", "穿越", "升级流", "热血"] },
-  { name: "都市", emoji: "🏙️", tags: ["赘婿", "神医", "总裁", "职场", "逆袭"] },
-  { name: "仙侠", emoji: "🏔️", tags: ["修仙", "宗门", "渡劫", "长生", "问道"] },
-  { name: "科幻", emoji: "🚀", tags: ["末世", "星际", "AI", "赛博朋克", "时空"] },
-  { name: "竞技", emoji: "🏆", tags: ["篮球", "足球", "电竞", "赛车", "奥运"] },
-  { name: "历史", emoji: "📜", tags: ["穿越", "三国", "唐朝", "明朝", "战争"] },
-  { name: "悬疑", emoji: "🔍", tags: ["推理", "破案", "惊悚", "心理", "密室"] },
-  { name: "言情", emoji: "💕", tags: ["甜宠", "虐恋", "穿越", "霸总", "校园"] },
+  { name: "玄幻", i18nKey: "fantasy", emoji: "⚔️", tags: ["重生", "系统", "穿越", "升级流", "热血"] },
+  { name: "都市", i18nKey: "urban", emoji: "🏙️", tags: ["赘婿", "神医", "总裁", "职场", "逆袭"] },
+  { name: "仙侠", i18nKey: "xianxia", emoji: "🏔️", tags: ["修仙", "宗门", "渡劫", "长生", "问道"] },
+  { name: "科幻", i18nKey: "scifi", emoji: "🚀", tags: ["末世", "星际", "AI", "赛博朋克", "时空"] },
+  { name: "竞技", i18nKey: "sports", emoji: "🏆", tags: ["篮球", "足球", "电竞", "赛车", "奥运"] },
+  { name: "历史", i18nKey: "history", emoji: "📜", tags: ["穿越", "三国", "唐朝", "明朝", "战争"] },
+  { name: "悬疑", i18nKey: "mystery", emoji: "🔍", tags: ["推理", "破案", "惊悚", "心理", "密室"] },
+  { name: "言情", i18nKey: "romance", emoji: "💕", tags: ["甜宠", "虐恋", "穿越", "霸总", "校园"] },
 ];
 
 const CONCEPT_IDEAS = [
@@ -72,12 +73,12 @@ const CONCEPT_IDEAS = [
 ];
 
 const STEPS = [
-  { key: 1, label: "选择分类", icon: "📚" },
-  { key: 2, label: "填写创意", icon: "💡" },
-  { key: 3, label: "世界观", icon: <Globe className="w-4 h-4" /> },
-  { key: 4, label: "人物设定", icon: <User className="w-4 h-4" /> },
-  { key: 5, label: "章节大纲", icon: <ListOrdered className="w-4 h-4" /> },
-  { key: 6, label: "确认", icon: "✨" },
+  { key: 1, labelKey: "steps.selectCategory", icon: "📚" },
+  { key: 2, labelKey: "steps.concept", icon: "💡" },
+  { key: 3, labelKey: "steps.worldview", icon: <Globe className="w-4 h-4" /> },
+  { key: 4, labelKey: "steps.character", icon: <User className="w-4 h-4" /> },
+  { key: 5, labelKey: "steps.outline", icon: <ListOrdered className="w-4 h-4" /> },
+  { key: 6, labelKey: "steps.confirm", icon: "✨" },
 ];
 
 interface GuidedCreationProps {
@@ -85,6 +86,7 @@ interface GuidedCreationProps {
 }
 
 export function GuidedCreation({ onClose }: GuidedCreationProps) {
+  const t = useTranslations("create");
   const {
     creationStep,
     creationData,
@@ -123,6 +125,8 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
   );
   const [error, setError] = useState<string | null>(null);
   const [isCreatingNovel, setIsCreatingNovel] = useState(false);
+  const [coverLoading, setCoverLoading] = useState(false);
+  const [coverError, setCoverError] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(["worldview", "character", "outline"])
   );
@@ -133,6 +137,34 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
   const generateCharacterMutation = trpc.creation.generateCharacter.useMutation();
   const generateOutlineMutation = trpc.creation.generateOutline.useMutation();
   const createNovelMutation = trpc.creation.createNovelWithAI.useMutation();
+  const generateCoverMutation = trpc.creation.generateCover.useMutation();
+
+  // Trigger cover generation when entering the completion page (step 8)
+  useEffect(() => {
+    if (creationStep === 8 && creationData.metadata && !creationData.coverUrl && !coverLoading && !coverError) {
+      setCoverLoading(true);
+      generateCoverMutation.mutate(
+        {
+          title: creationData.metadata.title,
+          summary: creationData.metadata.summary,
+          category: creationData.metadata.category,
+          tags: creationData.metadata.tags,
+        },
+        {
+          onSuccess: (result) => {
+            updateCreationData({ coverUrl: result.coverUrl });
+            setCoverLoading(false);
+          },
+          onError: (error) => {
+            console.error("Cover generation failed:", error);
+            setCoverLoading(false);
+            setCoverError(true);
+            toast.error(t("guided.coverFailed"));
+          },
+        }
+      );
+    }
+  }, [creationStep]);
 
   useEffect(() => {
     if (chapterStream.content) {
@@ -210,19 +242,19 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
     switch (step) {
       case 1:
         if (!selectedCategory) {
-          setError("请选择小说分类");
+          setError(t("guided.validation.selectCategory"));
           return false;
         }
         return true;
       case 2:
         if (concept.length < 10 || concept.length > 500) {
-          setError("创意描述需10-500字");
+          setError(t("guided.validation.conceptLength"));
           return false;
         }
         return true;
       case 3:
         if (!worldview || worldview.length < 50) {
-          setError("世界观设定不能少于50字");
+          setError(t("guided.validation.worldviewLength"));
           return false;
         }
         return true;
@@ -234,13 +266,13 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           !character.goal ||
           !character.appearance
         ) {
-          setError("请完善人物信息");
+          setError(t("guided.validation.characterInfo"));
           return false;
         }
         return true;
       case 5:
         if (outline.length === 0) {
-          setError("请至少添加一个章节大纲");
+          setError(t("guided.validation.addOutline"));
           return false;
         }
         return true;
@@ -302,7 +334,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
       }
       await generateWorldviewInternal(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败，请重试");
+      setError(err instanceof Error ? err.message : t("common.generationFailed"));
     }
   };
 
@@ -320,7 +352,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
       setWorldview(result.worldview);
       updateCreationData({ worldview: result.worldview });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败，请重试");
+      setError(err instanceof Error ? err.message : t("common.generationFailed"));
     }
   };
 
@@ -338,7 +370,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
       setCharacter(result);
       updateCreationData({ character: result });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败，请重试");
+      setError(err instanceof Error ? err.message : t("common.generationFailed"));
     }
   };
 
@@ -362,7 +394,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
       setOutline(chaptersWithOrder);
       updateCreationData({ outline: chaptersWithOrder });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成失败，请重试");
+      setError(err instanceof Error ? err.message : t("common.generationFailed"));
     }
   };
 
@@ -428,6 +460,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
         summary: creationData.metadata.summary,
         categoryName: creationData.metadata.category,
         tags: creationData.metadata.tags,
+        cover: creationData.coverUrl, // Pass AI-generated cover URL if available
         chapters: creationData.generatedChapters.map((ch) => ({
           title: ch.title,
           content: ch.content,
@@ -437,8 +470,14 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
 
       const now = new Date().toISOString();
       const firstChapterContent = creationData.generatedChapters[0]?.content || "";
-      const chapters = creationData.generatedChapters.map((ch, idx) => ({
-        id: idx === 0 ? result.firstChapterId : generateChapterId(),
+      
+      // Create a map of order -> chapterId from the backend response
+      const chapterIdMap = new Map(
+        result.chapters.map((ch) => [ch.order, ch.chapterId])
+      );
+
+      const chapters = creationData.generatedChapters.map((ch) => ({
+        id: chapterIdMap.get(ch.order) || generateChapterId(),
         title: ch.title,
         content: ch.content,
         order: ch.order,
@@ -464,12 +503,18 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
       };
 
       addNovel(novel);
-      setCurrentChapter(result.firstChapterId);
+      // Set current chapter to the first chapter (order 1)
+      const firstChapterId = chapterIdMap.get(1);
+      if (firstChapterId) {
+        setCurrentChapter(firstChapterId);
+      }
       setEditorContent(firstChapterContent);
       setCreationMode(null);
       resetCreationFlow();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "创建小说失败，请重试");
+      const errorMsg = err instanceof Error ? err.message : t("guided.validation.createFailed");
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsCreatingNovel(false);
     }
@@ -550,7 +595,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                     !isCompleted && !isCurrent && "text-muted-foreground"
                   )}
                 >
-                  {step.label}
+                  {t("guided." + step.labelKey)}
                 </span>
               </div>
               {idx < STEPS.length - 1 && (
@@ -573,8 +618,8 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold mb-2">选择小说分类</h2>
-        <p className="text-muted-foreground">选择一个你想创作的小说类型</p>
+        <h2 className="text-2xl font-bold mb-2">{t("guided.selectCategory")}</h2>
+        <p className="text-muted-foreground">{t("guided.selectCategoryDesc")}</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {CATEGORIES.map((cat) => (
@@ -592,13 +637,13 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             )}
           >
             <span className="text-3xl">{cat.emoji}</span>
-            <span className="font-medium">{cat.name}</span>
+            <span className="font-medium">{t(`categories.${cat.i18nKey}`)}</span>
           </button>
         ))}
       </div>
       {currentCategory && (
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">选择相关标签（可多选）：</p>
+          <p className="text-sm text-muted-foreground">{t("guided.selectTags")}</p>
           <div className="flex flex-wrap gap-2">
             {currentCategory.tags.map((tag) => (
               <button
@@ -623,8 +668,8 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
   const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold mb-2">描述你的创意</h2>
-        <p className="text-muted-foreground">用简单的话描述你想写的故事</p>
+        <h2 className="text-2xl font-bold mb-2">{t("guided.describeConcept")}</h2>
+        <p className="text-muted-foreground">{t("guided.describeConceptDesc")}</p>
       </div>
       <div className="relative">
         <Textarea
@@ -633,7 +678,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             setConcept(e.target.value);
             setError(null);
           }}
-          placeholder="描述你想写的小说，主角是谁？发生了什么故事？..."
+          placeholder={t("guided.conceptPlaceholder")}
           className="min-h-[150px] resize-none text-base p-4"
           maxLength={500}
         />
@@ -644,7 +689,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Lightbulb className="w-4 h-4 text-amber-500" />
-          <span className="text-sm font-medium">灵感参考</span>
+          <span className="text-sm font-medium">{t("guided.inspirationRef")}</span>
         </div>
         <div className="space-y-2">
           {CONCEPT_IDEAS.map((idea, idx) => (
@@ -665,8 +710,8 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold mb-2">世界观设定</h2>
-          <p className="text-muted-foreground">AI将根据你的创意生成世界观，你也可以手动编辑</p>
+          <h2 className="text-2xl font-bold mb-2">{t("guided.worldviewSetting")}</h2>
+          <p className="text-muted-foreground">{t("guided.worldviewDesc")}</p>
         </div>
         <Button
           variant="outline"
@@ -679,7 +724,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           ) : (
             <RefreshCw className="w-4 h-4 mr-2" />
           )}
-          重新生成
+          {t("regenerate")}
         </Button>
       </div>
       {generateWorldviewMutation.isPending && !worldview ? (
@@ -697,7 +742,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             setError(null);
           }}
           className="min-h-[300px] resize-none text-base p-4 leading-relaxed"
-          placeholder="描述故事发生的世界背景、势力分布、修炼体系等..."
+          placeholder={t("guided.worldviewPlaceholder")}
         />
       )}
     </div>
@@ -707,8 +752,8 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold mb-2">人物设定</h2>
-          <p className="text-muted-foreground">设定主角信息，AI会帮你完善细节</p>
+          <h2 className="text-2xl font-bold mb-2">{t("guided.characterSetting")}</h2>
+          <p className="text-muted-foreground">{t("guided.characterDesc")}</p>
         </div>
         <Button
           variant="outline"
@@ -721,7 +766,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           ) : (
             <RefreshCw className="w-4 h-4 mr-2" />
           )}
-          重新生成
+          {t("regenerate")}
         </Button>
       </div>
       {generateCharacterMutation.isPending && !character.name ? (
@@ -731,15 +776,15 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">姓名</label>
+            <label className="text-sm font-medium">{t("guided.name")}</label>
             <Input
               value={character.name}
               onChange={(e) => setCharacter({ ...character, name: e.target.value })}
-              placeholder="输入角色姓名"
+              placeholder={t("guided.namePlaceholder")}
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">性别</label>
+            <label className="text-sm font-medium">{t("guided.gender")}</label>
             <Select
               value={character.gender}
               onValueChange={(v) => v && setCharacter({ ...character, gender: v })}
@@ -748,14 +793,14 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="男">男</SelectItem>
-                <SelectItem value="女">女</SelectItem>
-                <SelectItem value="其他">其他</SelectItem>
+                <SelectItem value="男">{t("guided.male")}</SelectItem>
+                <SelectItem value="女">{t("guided.female")}</SelectItem>
+                <SelectItem value="其他">{t("guided.other")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">年龄</label>
+            <label className="text-sm font-medium">{t("guided.age")}</label>
             <Input
               type="number"
               value={character.age}
@@ -767,42 +812,42 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">性格特点</label>
+            <label className="text-sm font-medium">{t("guided.personality")}</label>
             <Input
               value={character.personality}
               onChange={(e) =>
                 setCharacter({ ...character, personality: e.target.value })
               }
-              placeholder="如：冷静沉稳、外冷内热、乐观开朗..."
+              placeholder={t("guided.personalityPlaceholder")}
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-medium">目标追求</label>
+            <label className="text-sm font-medium">{t("guided.goal")}</label>
             <Input
               value={character.goal}
               onChange={(e) => setCharacter({ ...character, goal: e.target.value })}
-              placeholder="角色想要达成什么目标？"
+              placeholder={t("guided.goalPlaceholder")}
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-medium">外貌描写</label>
+            <label className="text-sm font-medium">{t("guided.appearance")}</label>
             <Textarea
               value={character.appearance}
               onChange={(e) =>
                 setCharacter({ ...character, appearance: e.target.value })
               }
-              placeholder="描述角色的外貌特征..."
+              placeholder={t("guided.appearancePlaceholder")}
               className="min-h-[80px]"
             />
           </div>
           <div className="space-y-2 md:col-span-2">
-            <label className="text-sm font-medium">背景故事</label>
+            <label className="text-sm font-medium">{t("guided.backgroundStory")}</label>
             <Textarea
               value={character.background}
               onChange={(e) =>
                 setCharacter({ ...character, background: e.target.value })
               }
-              placeholder="描述角色的身世背景、成长经历..."
+              placeholder={t("guided.backgroundPlaceholder")}
               className="min-h-[100px]"
             />
           </div>
@@ -815,8 +860,8 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold mb-2">章节大纲</h2>
-          <p className="text-muted-foreground">规划小说的章节结构，AI将按大纲生成内容</p>
+          <h2 className="text-2xl font-bold mb-2">{t("guided.chapterOutline")}</h2>
+          <p className="text-muted-foreground">{t("guided.chapterOutlineDesc")}</p>
         </div>
         <Button
           variant="outline"
@@ -829,7 +874,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           ) : (
             <RefreshCw className="w-4 h-4 mr-2" />
           )}
-          重新生成
+          {t("regenerate")}
         </Button>
       </div>
       {generateOutlineMutation.isPending && outline.length === 0 ? (
@@ -864,7 +909,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                   <Input
                     value={chapter.title}
                     onChange={(e) => handleUpdateChapter(idx, "title", e.target.value)}
-                    placeholder="章节标题"
+                    placeholder={t("guided.chapterTitle")}
                     className="font-medium"
                   />
                   <Textarea
@@ -872,7 +917,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                     onChange={(e) =>
                       handleUpdateChapter(idx, "summary", e.target.value)
                     }
-                    placeholder="章节概要"
+                    placeholder={t("guided.chapterSummary")}
                     className="min-h-[60px] text-sm"
                   />
                 </div>
@@ -890,7 +935,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             onClick={handleAddChapter}
             className="w-full border-dashed"
           >
-            + 添加章节
+            {t("guided.addChapter")}
           </Button>
         </div>
       )}
@@ -902,8 +947,8 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
     return (
       <div className="space-y-6">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">确认信息</h2>
-          <p className="text-muted-foreground">确认所有信息无误后，开始生成小说正文</p>
+          <h2 className="text-2xl font-bold mb-2">{t("guided.confirmInfo")}</h2>
+          <p className="text-muted-foreground">{t("guided.confirmInfoDesc")}</p>
         </div>
         <Card>
           <CardContent className="p-6">
@@ -939,7 +984,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
               >
                 <div className="flex items-center gap-2">
                   <Globe className="w-5 h-5 text-violet-500" />
-                  <span className="font-medium">世界观设定</span>
+                  <span className="font-medium">{t("guided.worldviewSetting")}</span>
                 </div>
                 {expandedSections.has("worldview") ? (
                   <ChevronRight className="w-5 h-5 rotate-90" />
@@ -961,7 +1006,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
               >
                 <div className="flex items-center gap-2">
                   <User className="w-5 h-5 text-violet-500" />
-                  <span className="font-medium">人物设定</span>
+                  <span className="font-medium">{t("guided.characterSetting")}</span>
                 </div>
                 {expandedSections.has("character") ? (
                   <ChevronRight className="w-5 h-5 rotate-90" />
@@ -971,11 +1016,11 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
               </button>
               {expandedSections.has("character") && (
                 <div className="pl-7 space-y-1 text-sm">
-                  <p><span className="text-muted-foreground">姓名：</span>{character.name}</p>
-                  <p><span className="text-muted-foreground">性别：</span>{character.gender}</p>
-                  <p><span className="text-muted-foreground">年龄：</span>{character.age}</p>
-                  <p><span className="text-muted-foreground">性格特点：</span>{character.personality}</p>
-                  <p><span className="text-muted-foreground">目标追求：</span>{character.goal}</p>
+                  <p><span className="text-muted-foreground">{t("guided.nameLabel")}</span>{character.name}</p>
+                  <p><span className="text-muted-foreground">{t("guided.genderLabel")}</span>{character.gender}</p>
+                  <p><span className="text-muted-foreground">{t("guided.ageLabel")}</span>{character.age}</p>
+                  <p><span className="text-muted-foreground">{t("guided.personalityLabel")}</span>{character.personality}</p>
+                  <p><span className="text-muted-foreground">{t("guided.goalLabel")}</span>{character.goal}</p>
                   <p className="text-muted-foreground whitespace-pre-wrap">{character.background}</p>
                 </div>
               )}
@@ -988,7 +1033,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
               >
                 <div className="flex items-center gap-2">
                   <ListOrdered className="w-5 h-5 text-violet-500" />
-                  <span className="font-medium">章节大纲 ({outline.length}章)</span>
+                  <span className="font-medium">{t("guided.chapterOutlineCount", { count: outline.length })}</span>
                 </div>
                 {expandedSections.has("outline") ? (
                   <ChevronRight className="w-5 h-5 rotate-90" />
@@ -1000,7 +1045,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                 <div className="pl-7 space-y-2">
                   {outline.map((ch, idx) => (
                     <div key={idx} className="text-sm">
-                      <p className="font-medium">第{ch.order}章 {ch.title}</p>
+                      <p className="font-medium">{t("guided.chapterNum", { order: ch.order })} {ch.title}</p>
                       <p className="text-muted-foreground text-xs mt-1">{ch.summary}</p>
                     </div>
                   ))}
@@ -1010,7 +1055,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           </CardContent>
         </Card>
         <p className="text-sm text-center text-muted-foreground">
-          确认无误后，点击下方按钮开始生成正文
+          {t("guided.confirmStart")}
         </p>
       </div>
     );
@@ -1033,10 +1078,10 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             <Loader2 className="w-12 h-12 animate-spin text-violet-500 mx-auto mb-4" />
           )}
           <h2 className={cn("text-2xl font-bold mb-2", hasError && "text-red-600 dark:text-red-400")}>
-            {hasError ? "生成失败" : `正在生成第${currentChapter + 1}/${totalChapters}章`}
+            {hasError ? t("guided.generationFailedTitle") : t("guided.generatingChapter", { current: currentChapter + 1, total: totalChapters })}
           </h2>
           <p className="text-muted-foreground">
-            {hasError ? "章节生成遇到问题，请重试或返回修改" : "AI正在根据大纲撰写章节内容，请稍候..."}
+            {hasError ? t("guided.generationErrorDesc") : t("guided.generationProgressDesc")}
           </p>
         </div>
         <div className="max-w-md mx-auto">
@@ -1056,13 +1101,13 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-violet-500" />
-                {outline[currentChapter]?.title || "章节预览"}
+                {outline[currentChapter]?.title || t("guided.chapterPreview")}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-64 w-full rounded-md border p-4 bg-muted/30">
                 <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {creationData.chapterStreamContent || "正在准备生成..."}
+                  {creationData.chapterStreamContent || t("guided.preparingGeneration")}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -1082,18 +1127,23 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mb-4 dark:bg-emerald-950/30 dark:text-emerald-400">
             <CheckCircle2 className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold">生成完成！</h2>
+          <h2 className="text-2xl font-bold">{t("guided.generationComplete")}</h2>
         </div>
 
         <Card>
           <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row gap-6">
-              <AICover
-                title={metadata.title}
-                category={metadata.category}
-                size="lg"
-                className="shrink-0 mx-auto sm:mx-0"
-              />
+              {coverLoading ? (
+                <div className="w-40 h-56 rounded-lg bg-muted animate-pulse shrink-0 mx-auto sm:mx-0" />
+              ) : (
+                <AICover
+                  title={metadata.title}
+                  category={metadata.category}
+                  coverUrl={creationData.coverUrl}
+                  size="lg"
+                  className="shrink-0 mx-auto sm:mx-0"
+                />
+              )}
               <div className="flex-1">
                 <h3 className="text-2xl font-bold mb-2">{metadata.title}</h3>
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -1116,7 +1166,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-violet-500" />
-              章节列表
+              {t("guided.chapterList")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -1129,7 +1179,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                   <div>
                     <div className="font-medium">{chapter.title}</div>
                     <div className="text-xs text-muted-foreground">
-                      {chapter.wordCount} 字
+                      {t("guided.wordsCount", { count: chapter.wordCount })}
                     </div>
                   </div>
                 </div>
@@ -1141,7 +1191,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
         <div className="flex gap-4 justify-end">
           <Button variant="outline" onClick={() => setCreationStep(6)} disabled={isCreatingNovel}>
             <ChevronLeft className="w-4 h-4 mr-2" />
-            返回修改
+            {t("guided.goBack")}
           </Button>
           <Button
             onClick={handleCreateNovel}
@@ -1151,9 +1201,9 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             {isCreatingNovel ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              <Pencil className="w-4 h-4 mr-2" />
+              <BookOpen className="w-4 h-4 mr-2" />
             )}
-            开始创作
+            {t("guided.enterEditor")}
           </Button>
         </div>
       </div>
@@ -1176,14 +1226,16 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
               <div className="flex-1">
-                <h4 className="font-semibold mb-1">操作失败</h4>
+                <h4 className="font-semibold mb-1">{t("guided.operationFailed")}</h4>
                 <p className="text-sm mb-3">
                   {getErrorMessage(
                     error ||
                       (creationStep === 3 && generateWorldviewMutation.error?.message) ||
                       (creationStep === 4 && generateCharacterMutation.error?.message) ||
                       (creationStep === 5 && generateOutlineMutation.error?.message) ||
-                      chapterStream.error
+                      chapterStream.error,
+                    t("common.generationFailed"),
+                    t("common.loginRequired")
                   )}
                 </p>
                 <div className="flex gap-2 flex-wrap">
@@ -1198,7 +1250,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                       href="/login"
                       className={loginLinkClass}
                     >
-                      去登录
+                      {t("guided.goLogin")}
                     </Link>
                   ) : (
                     <>
@@ -1210,7 +1262,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                           className="bg-white border-red-300 text-red-700 hover:bg-red-50 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300"
                         >
                           <RefreshCw className="w-4 h-4 mr-1" />
-                          重新生成世界观
+                          {t("guided.retryWorldview")}
                         </Button>
                       )}
                       {creationStep === 4 && (
@@ -1221,7 +1273,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                           className="bg-white border-red-300 text-red-700 hover:bg-red-50 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300"
                         >
                           <RefreshCw className="w-4 h-4 mr-1" />
-                          重新生成人物
+                          {t("guided.retryCharacter")}
                         </Button>
                       )}
                       {creationStep === 5 && (
@@ -1232,7 +1284,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                           className="bg-white border-red-300 text-red-700 hover:bg-red-50 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300"
                         >
                           <RefreshCw className="w-4 h-4 mr-1" />
-                          重新生成大纲
+                          {t("guided.retryOutline")}
                         </Button>
                       )}
                       {creationStep === 7 && (
@@ -1243,7 +1295,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                           className="bg-white border-red-300 text-red-700 hover:bg-red-50 dark:bg-red-900/30 dark:border-red-700 dark:text-red-300"
                         >
                           <RefreshCw className="w-4 h-4 mr-1" />
-                          重试生成
+                          {t("guided.retryGeneration")}
                         </Button>
                       )}
                       {creationStep === 7 && (
@@ -1257,7 +1309,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                           className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
                         >
                           <ChevronLeft className="w-4 h-4 mr-1" />
-                          返回修改
+                          {t("guided.goBack")}
                         </Button>
                       )}
                       {creationStep <= 6 && error && (
@@ -1268,7 +1320,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                           className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300"
                         >
                           <X className="w-4 h-4 mr-1" />
-                          关闭
+                          {t("guided.close")}
                         </Button>
                       )}
                     </>
@@ -1303,7 +1355,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                 }}
               >
                 <X className="w-4 h-4 mr-2" />
-                退出创作
+                {t("guided.exitCreation")}
               </Button>
             ) : (
               <Button
@@ -1311,7 +1363,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
                 onClick={handleBack}
               >
                 <ChevronLeft className="w-4 h-4 mr-2" />
-                上一步
+                {t("guided.previous")}
               </Button>
             )}
             <Button
@@ -1328,11 +1380,11 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
               {creationStep === 6 ? (
                 <>
                   <Sparkles className="w-4 h-4 mr-2" />
-                  开始生成
+                  {t("guided.startGenerate")}
                 </>
               ) : (
                 <>
-                  下一步
+                  {t("guided.next")}
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </>
               )}
