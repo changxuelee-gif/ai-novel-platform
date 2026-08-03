@@ -18,7 +18,7 @@ interface QuickCreateData {
 }
 
 interface UseQuickCreateResult {
-  generate: (concept: string) => void;
+  generate: (concept: string, locale?: string) => void;
   loading: boolean;
   error: string | null;
   data: QuickCreateData | null;
@@ -55,7 +55,7 @@ export function useQuickCreate(): UseQuickCreateResult {
   }, [metadataMutation, worldviewMutation, characterMutation, outlineMutation]);
 
   const generate = useCallback(
-    async (concept: string) => {
+    async (concept: string, locale?: string) => {
       cancelledRef.current = false;
       setLoading(true);
       setError(null);
@@ -64,7 +64,7 @@ export function useQuickCreate(): UseQuickCreateResult {
       try {
         // Step 1: Generate metadata
         setCurrentStep("metadata");
-        const metadata = await metadataMutation.mutateAsync({ concept });
+        const metadata = await metadataMutation.mutateAsync({ concept, locale });
         if (cancelledRef.current) return;
 
         // Step 2: Generate worldview
@@ -75,6 +75,7 @@ export function useQuickCreate(): UseQuickCreateResult {
           category: metadata.category,
           tags: metadata.tags,
           summary: metadata.summary,
+          locale,
         });
         if (cancelledRef.current) return;
 
@@ -87,6 +88,7 @@ export function useQuickCreate(): UseQuickCreateResult {
           tags: metadata.tags,
           summary: metadata.summary,
           worldview: worldviewResult.worldview,
+          locale,
         });
         if (cancelledRef.current) return;
 
@@ -101,6 +103,7 @@ export function useQuickCreate(): UseQuickCreateResult {
           worldview: worldviewResult.worldview,
           character,
           chapterCount: 3,
+          locale,
         });
         if (cancelledRef.current) return;
 

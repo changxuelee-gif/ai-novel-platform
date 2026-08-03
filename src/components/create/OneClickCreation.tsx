@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { toast } from "sonner";
 import {
   Sparkles,
@@ -52,6 +52,7 @@ interface OneClickCreationProps {
 
 export function OneClickCreation({ onClose }: OneClickCreationProps) {
   const t = useTranslations("create");
+  const locale = useLocale();
   const {
     creationStep,
     creationData,
@@ -146,6 +147,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
             })),
             chapterIndex: nextIdx,
             previousSummary,
+            locale,
           });
         }, 100);
       } else {
@@ -179,6 +181,7 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
             summary: ch.summary,
           })),
           chapterIndex: 0,
+          locale,
         });
       }, 100);
     }
@@ -190,13 +193,13 @@ export function OneClickCreation({ onClose }: OneClickCreationProps) {
     chapterStream.cancel();
     updateCreationData({ concept });
     setCreationStep(1);
-    quickCreate.generate(concept);
+    quickCreate.generate(concept, locale);
   };
 
   const handleRetryQuickCreate = () => {
     quickCreate.reset();
     chapterStream.cancel();
-    quickCreate.generate(concept);
+    quickCreate.generate(concept, locale);
   };
 
   const handleBackToEdit = () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { toast } from "sonner";
 import {
   Sparkles,
@@ -87,6 +87,7 @@ interface GuidedCreationProps {
 
 export function GuidedCreation({ onClose }: GuidedCreationProps) {
   const t = useTranslations("create");
+  const locale = useLocale();
   const {
     creationStep,
     creationData,
@@ -209,6 +210,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             })),
             chapterIndex: nextIdx,
             previousSummary,
+            locale,
           });
         }, 100);
       } else {
@@ -322,7 +324,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
 
   const generateMetadata = async () => {
     try {
-      const result = await generateMetadataMutation.mutateAsync({ concept });
+      const result = await generateMetadataMutation.mutateAsync({ concept, locale });
       updateCreationData({
         metadata: result,
       });
@@ -348,6 +350,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
         category: meta.category,
         tags: meta.tags,
         summary: meta.summary,
+        locale,
       });
       setWorldview(result.worldview);
       updateCreationData({ worldview: result.worldview });
@@ -366,6 +369,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
         tags: creationData.metadata.tags,
         summary: creationData.metadata.summary,
         worldview,
+        locale,
       });
       setCharacter(result);
       updateCreationData({ character: result });
@@ -386,6 +390,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
         worldview,
         character,
         chapterCount: 5,
+        locale,
       });
       const chaptersWithOrder = result.chapters.map((ch, idx) => ({
         ...ch,
@@ -419,6 +424,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
             summary: ch.summary,
           })),
           chapterIndex: 0,
+          locale,
         });
       }, 100);
     }
@@ -446,6 +452,7 @@ export function GuidedCreation({ onClose }: GuidedCreationProps) {
           summary: ch.summary,
         })),
         chapterIndex: 0,
+        locale,
       });
     }, 100);
   };
